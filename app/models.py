@@ -1,53 +1,57 @@
+from enum import Enum
 from typing import Any, Dict, List, Optional
 
-from app.language import Language
+from app.constants.language import Language
+
+
+class ConversationParticipant(Enum):
+    USER = "user"
+    RESPONDENT = "respondent"
 
 
 class Message:
     def __init__(
         self,
+        sender: Optional[ConversationParticipant] = None,
         content: str = "",
         translation: str = "",
-        content_tts_uri: str = "",
-        translation_tts_uri: str = "",
+        tts_uri: str = "",
     ):
+        self.sender = sender
         self.content = content
         self.translation = translation
-        self.content_tts_uri = content_tts_uri
-        self.translation_tts_uri = translation_tts_uri
+        self.tts_uri = tts_uri
 
     def to_dict(self) -> Dict[str, Any]:
         return {
+            "sender": self.sender.value,
             "content": self.content,
             "translation": self.translation,
-            "content_tts_uri": self.content_tts_uri,
-            "translation_tts_uri": self.translation_tts_uri,
+            "tts_uri": self.tts_uri,
         }
 
     def to_cacheable_str(self) -> str:
         d = {
+            "sender": self.sender.value,
             "content": self.content,
             "translation": self.translation,
-            "content_tts_uri": self.content_tts_uri,
-            "translation_tts_uri": self.translation_tts_uri,
+            "tts_uri": self.tts_uri,
         }
         return str(d)
 
     def from_cacheable_str(self, s: str):
         d = eval(s)
+        self.sender = ConversationParticipant(d["sender"])
         self.content = d["content"]
         self.translation = d["translation"]
-        self.content_tts_uri = d["content_tts_uri"] if "content_tts_uri" in d else ""
-        self.translation_tts_uri = (
-            d["translation_tts_uri"] if "translation_tts_uri" in d else ""
-        )
+        self.tts_uri = d["tts_uri"] if "tts_uri" in d else ""
 
     def __repr__(self) -> str:
-        return "Message(content={}, translation={}, content_tts_uri={}, translation_tts_uri={})".format(
+        return "Message(sender={}, content={}, translation={}, tts_uri={})".format(
+            self.sender,
             self.content,
             self.translation,
-            self.content_tts_uri,
-            self.translation_tts_uri,
+            self.tts_uri,
         )
 
 
@@ -55,11 +59,13 @@ class Conversation:
     def __init__(
         self,
         id: str = "",
+        intro_message: Optional[Message] = None,
         history: List[Message] = [],
         user_lang: Optional[Language] = None,
         resp_lang: Optional[Language] = None,
     ):
         self.id = id
+        self.intro_message = intro_message
         self.history = history
         self.user_lang = user_lang
         self.resp_lang = resp_lang
@@ -67,14 +73,16 @@ class Conversation:
     def to_dict(self) -> Dict[str, Any]:
         return {
             "id": self.id,
+            "intro_message": self.intro_message,
             "history": [message.to_dict() for message in self.history],
-            "user_lang": self.user_lang.value,
-            "resp_lang": self.resp_lang.value,
+            "user_lang": self.user_lang.value.capitalize(),
+            "resp_lang": self.resp_lang.value.capitalize(),
         }
 
     def to_cacheable_str(self) -> str:
         d = {
             "id": self.id,
+            "intro_message": self.intro_message,
             "history": [message.to_cacheable_str() for message in self.history],
             "user_lang": self.user_lang.value,
             "resp_lang": self.resp_lang.value,
@@ -84,6 +92,7 @@ class Conversation:
     def from_cacheable_str(self, s: str):
         d = eval(s)
         self.id = d["id"]
+        self.intro_message = d["intro_message"]
 
         self.history = []
         for message_dict in d["history"]:
@@ -95,8 +104,6 @@ class Conversation:
         self.resp_lang = Language(d["resp_lang"])
 
     def __repr__(self) -> str:
-        return (
-            "ConversationHistory(id={}, history={}, user_lang={}, resp_lang={})".format(
-                self.id, self.history, self.user_lang, self.resp_lang
-            )
+        return "ConversationHistory(id={}, intro_message={}, history={}, user_lang={}, resp_lang={})".format(
+            self.id, self.intro_message, self.history, self.user_lang, self.resp_lang
         )

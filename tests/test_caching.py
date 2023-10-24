@@ -1,8 +1,8 @@
 import pytest
 
 from app.caching import new_conversation, get_conversation
-from tests.test_fixtures import conversation, message
-from tests.test_utils import conversations_equal
+from tests.fixtures import conversation, message
+from tests.utils import conversations_equal
 
 
 class MockRedisClient:

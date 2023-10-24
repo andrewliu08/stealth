@@ -1,7 +1,7 @@
 import requests
 from typing import Dict
 
-from app.language import Language
+from app.constants.language import Language
 
 API_URL = "https://api-free.deepl.com/v2/translate"
 

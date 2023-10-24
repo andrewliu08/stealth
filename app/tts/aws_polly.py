@@ -2,7 +2,7 @@ from typing import Any, Dict
 
 import boto3
 
-from app.language import Language
+from app.constants.language import Language
 
 AWS_POLLY_LANG_TO_VOICE: Dict[Language, str] = {
     Language.ENGLISH: "Matthew",

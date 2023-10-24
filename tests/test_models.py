@@ -1,16 +1,16 @@
 from app.models import Conversation, Message
-from tests.test_fixtures import conversation, message
-from tests.test_utils import conversations_equal, messages_equal
+from tests.fixtures import conversation, message
+from tests.utils import conversations_equal, messages_equal
 
 
 def test_message_to_dict(message):
     message_dict = message.to_dict()
     assert isinstance(message_dict, dict)
 
+    assert message_dict["sender"] == "user"
     assert message_dict["content"] == "Hello"
     assert message_dict["translation"] == "Bonjour"
-    assert message_dict["content_tts_uri"] == "hello.mp3"
-    assert message_dict["translation_tts_uri"] == "bonjour.mp3"
+    assert message_dict["tts_uri"] == "bonjour.mp3"
 
 
 def test_message_cacheable_str(message):
@@ -32,11 +32,10 @@ def test_conversation_to_dict(conversation):
 
     assert conversation_dict["history"][0]["content"] == "Hello"
     assert conversation_dict["history"][0]["translation"] == "Bonjour"
-    assert conversation_dict["history"][0]["content_tts_uri"] == "hello.mp3"
-    assert conversation_dict["history"][0]["translation_tts_uri"] == "bonjour.mp3"
+    assert conversation_dict["history"][0]["tts_uri"] == "bonjour.mp3"
 
-    assert conversation_dict["user_lang"] == "english"
-    assert conversation_dict["resp_lang"] == "french"
+    assert conversation_dict["user_lang"] == "English"
+    assert conversation_dict["resp_lang"] == "French"
 
 
 def test_conversation_cacheable_str(conversation):

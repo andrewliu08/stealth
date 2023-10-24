@@ -3,8 +3,9 @@ import time
 from flask import Flask, request, jsonify
 
 from app import caching
-from app.language import Language
-from app.models import Conversation, Message
+from app.constants.intro_messages import INTRO_MESSAGE_TRANSLATIONS
+from app.constants.language import Language
+from app.models import Conversation, ConversationParticipant, Message
 
 # TODO: use more secure method of storing secret keys
 from app.secret_keys import *
@@ -49,34 +50,37 @@ def translate():
 
 @app.route("/new_conversation", methods=["POST"])
 def new_conversation():
-    t = time.time()
-
     message = request.form.get("message")
     intro = request.form.get("intro")
     user_lang = request.form.get("user_lang")
     resp_lang = request.form.get("resp_lang")
     if message is None or intro is None or user_lang is None or resp_lang is None:
-        return jsonify(error="Message parameter is required"), 400
+        return jsonify(error="Missing parameter"), 400
 
     user_lang = Language(user_lang)
     resp_lang = Language(resp_lang)
 
     translation_resp = deepl_translate(message, user_lang, resp_lang, DEEPL_API_KEY)
     translation = translation_resp.json()["translations"][0]["text"]
-    t1 = time.time()
 
-    tts_uri = polly_tts(polly_client, translation, resp_lang, "standard")
+    combined_message = message + "\n\n" + intro
+    combined_translation = translation + "\n\n" + INTRO_MESSAGE_TRANSLATIONS[resp_lang]
+
+    tts_uri = polly_tts(polly_client, combined_translation, resp_lang, "standard")
     file_name = extract_file_name_from_output_uri(tts_uri)
     presigned_tts_url = generate_presigned_url(
         AWS_ACCESS_KEY, AWS_SECRET_ACCESS_KEY, file_name
     )
-    t2 = time.time()
 
     conversation = Conversation(
         id=caching.create_conversation_id(),
+        intro_message=intro,
         history=[
             Message(
-                content=message, translation=translation, translation_tts_uri=tts_uri
+                sender=ConversationParticipant.USER,
+                content=combined_message,
+                translation=combined_translation,
+                tts_uri=presigned_tts_url,
             )
         ],
         user_lang=user_lang,
@@ -84,11 +88,26 @@ def new_conversation():
     )
     caching.new_conversation(redis_client, conversation)
 
-    t3 = time.time()
-
-    print("Translation time: {}".format(t1 - t))
-    print("Redis time: {}".format(t2 - t1))
-
-    # TODO: return presigned_tts_url
     resp = {"conversation": conversation.to_dict()}
     return jsonify(resp), 200
+
+
+@app.route("/test_new_conversation", methods=["GET"])
+def test_new_conversation():
+    conversation_dict = {
+        "conversation": {
+            "history": [
+                {
+                    "content": "hello everyone\n\nI am using a translation app. Please speak into the phone when you respond",
+                    "sender": "user",
+                    "translation": "Bonjour \u00e0 tous\n\nJ'utilise une application de traduction. Veuillez parler dans le t\u00e9l\u00e9phone lorsque vous r\u00e9pondez.",
+                    "tts_uri": "https://shuopolly.s3.amazonaws.com/tts.92d709b0-2c22-4db6-8d4a-2493704c1a7f.mp3?AWSAccessKeyId=AKIAUAUBZVHG5XLUVMHO&Signature=nzKLOQ23lg8VB5wkZ15dbOGixbw%3D&Expires=1698248159",
+                }
+            ],
+            "id": "7c551128-cd87-4a81-af24-d89b946cc2fb",
+            "intro_message": "I am using a translation app. Please speak into the phone when you respond",
+            "resp_lang": "French",
+            "user_lang": "English",
+        }
+    }
+    return jsonify(conversation_dict), 200
