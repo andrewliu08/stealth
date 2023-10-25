@@ -1,4 +1,4 @@
-from app.models import Conversation, Message
+from app.models import Conversation, ConversationParticipant, Message
 from tests.fixtures import conversation, message
 from tests.utils import conversations_equal, messages_equal
 
@@ -46,3 +46,24 @@ def test_conversation_cacheable_str(conversation):
     conversation2.from_cacheable_str(cacheable_repr)
 
     assert conversations_equal(conversation, conversation2)
+
+
+def test_conversation_new_message(conversation):
+    new_message = Message(
+        sender=ConversationParticipant.RESPONDENT,
+        content="Au revoir",
+        translation="Bye",
+        tts_uri="au_revoir.mp3",
+    )
+    conversation.new_message(new_message)
+    assert len(conversation.history) == 2
+
+    assert conversation.history[0].sender == ConversationParticipant.USER
+    assert conversation.history[0].content == "Hello"
+    assert conversation.history[0].translation == "Bonjour"
+    assert conversation.history[0].tts_uri == "bonjour.mp3"
+
+    assert conversation.history[1].sender == ConversationParticipant.RESPONDENT
+    assert conversation.history[1].content == "Au revoir"
+    assert conversation.history[1].translation == "Bye"
+    assert conversation.history[1].tts_uri == "au_revoir.mp3"

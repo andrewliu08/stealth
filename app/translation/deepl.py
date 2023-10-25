@@ -18,13 +18,18 @@ DEEPL_LANG_TO_TARGET_CODE: Dict[Language, str] = {
 }
 
 
-def deepl_translate(
-    text: str, source_lang: Language, target_lang: Language, api_key: str
-) -> requests.Response:
+def extract_translation_from_deepl_response(response: requests.Response) -> str:
     """
     Example response JSON:
     {'translations': [{'detected_source_language': 'EN', 'text': 'Bonjour'}]}
     """
+    translation = response.json()["translations"][0]["text"]
+    return translation
+
+
+def deepl_translate(
+    text: str, source_lang: Language, target_lang: Language, api_key: str
+) -> requests.Response:
     source_code = DEEPL_LANG_TO_SOURCE_CODE[source_lang]
     target_code = DEEPL_LANG_TO_TARGET_CODE[target_lang]
 
@@ -38,4 +43,4 @@ def deepl_translate(
     }
 
     response = requests.post(API_URL, headers=headers, data=data)
-    return response
+    return extract_translation_from_deepl_response(response)

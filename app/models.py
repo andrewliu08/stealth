@@ -70,6 +70,9 @@ class Conversation:
         self.user_lang = user_lang
         self.resp_lang = resp_lang
 
+    def new_message(self, message: Message):
+        self.history.append(message)
+
     def to_dict(self) -> Dict[str, Any]:
         return {
             "id": self.id,
