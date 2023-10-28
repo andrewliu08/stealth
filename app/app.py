@@ -1,4 +1,5 @@
 import time
+import os
 
 from flask import Flask, request, jsonify
 
@@ -99,21 +100,15 @@ def test_new_conversation():
     return jsonify(conversation_dict), 200
 
 
-@app.route("/new_message", methods=["POST"])
-def new_message():
+@app.route("/new_user_message", methods=["POST"])
+def new_user_message():
     params = request.get_json()
     conversation_id = params.get("conversationId")
-    sender = params.get("sender")
     content = params.get("content")
-    if conversation_id is None or sender is None or content is None:
+    if conversation_id is None or content is None:
         return jsonify(error="Missing parameter"), 400
     conversation_id = conversation_id.lower()
-    sender = sender.lower()
 
-    # only for user messages right now
-    assert sender == "user"
-
-    sender = ConversationParticipant(sender)
     conversation = caching.get_conversation(redis_client, conversation_id)
     if conversation is None:
         return jsonify(error="Conversation not found"), 404
@@ -140,21 +135,17 @@ def new_message():
     return jsonify(new_message.to_dict()), 200
 
 
-@app.route("/test_new_message", methods=["POST"])
-def test_new_message():
+@app.route("/test_new_user_message", methods=["POST"])
+def test_new_user_message():
     params = request.get_json()
     conversation_id = params.get("conversationId")
-    sender = params.get("sender")
     content = params.get("content")
-    print(conversation_id)
-    print(sender)
-    print(content)
+    print("conversation_id:", conversation_id)
+    print("content:", content)
     if conversation_id is None or content is None:
         return jsonify(error="Missing parameter"), 400
     conversation_id = conversation_id.lower()
-    sender = sender.lower()
 
-    sender = ConversationParticipant(sender)
     conversation = caching.get_conversation(redis_client, conversation_id)
     if conversation is None:
         return jsonify(error="Conversation not found"), 404
@@ -166,5 +157,37 @@ def test_new_message():
         tts_uri="https://shuopolly.s3.amazonaws.com/tts.92d709b0-2c22-4db6-8d4a-2493704c1a7f.mp3?AWSAccessKeyId=AKIAUAUBZVHG5XLUVMHO&Signature=nzKLOQ23lg8VB5wkZ15dbOGixbw%3D&Expires=1698248159",
     )
     conversation.new_message(new_message)
+
+    return jsonify(new_message.to_dict()), 200
+
+
+def allowed_file(filename):
+    return (
+        filename != ""
+        and "." in filename
+        and filename.rsplit(".", 1)[1].lower() in ["m4a"]
+    )
+
+
+@app.route("/test_new_resp_message", methods=["POST"])
+def test_new_resp_message():
+    conversation_id = request.form.get("conversationId")
+    file = request.files.get("file")
+    if conversation_id is None or file is None:
+        return jsonify(error="Missing parameter"), 400
+    if not allowed_file(file.filename):
+        return jsonify(error="Invalid file name"), 400
+
+    conversation_id = conversation_id.lower()
+    conversation = caching.get_conversation(redis_client, conversation_id)
+    if conversation is None:
+        return jsonify(error="Conversation not found"), 404
+
+    new_message = Message(
+        sender=ConversationParticipant.RESPONDENT,
+        content="test worked",
+        translation="asdf",
+        tts_uri="https://shuopolly.s3.amazonaws.com/tts.92d709b0-2c22-4db6-8d4a-2493704c1a7f.mp3?AWSAccessKeyId=AKIAUAUBZVHG5XLUVMHO&Signature=nzKLOQ23lg8VB5wkZ15dbOGixbw%3D&Expires=1698248159",
+    )
 
     return jsonify(new_message.to_dict()), 200
