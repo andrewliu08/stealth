@@ -1,9 +1,7 @@
 .vscode/*
 
-# Elastic Beanstalk Files
-.elasticbeanstalk/*
-!.elasticbeanstalk/*.cfg.yml
-!.elasticbeanstalk/*.global.yml
+*.ipynb
+*.mp3
 
 
 # Byte-compiled / optimized / DLL files
