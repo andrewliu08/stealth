@@ -78,8 +78,8 @@ class Conversation:
             "id": self.id,
             "intro_message": self.intro_message,
             "history": [message.to_dict() for message in self.history],
-            "user_lang": self.user_lang.value.capitalize(),
-            "resp_lang": self.resp_lang.value.capitalize(),
+            "user_lang": self.user_lang.value,
+            "resp_lang": self.resp_lang.value,
         }
 
     def to_cacheable_str(self) -> str:

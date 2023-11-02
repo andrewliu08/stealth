@@ -34,8 +34,8 @@ def test_conversation_to_dict(conversation):
     assert conversation_dict["history"][0]["translation"] == "Bonjour"
     assert conversation_dict["history"][0]["tts_uri"] == "bonjour.mp3"
 
-    assert conversation_dict["user_lang"] == "English"
-    assert conversation_dict["resp_lang"] == "French"
+    assert conversation_dict["user_lang"] == "english"
+    assert conversation_dict["resp_lang"] == "french"
 
 
 def test_conversation_cacheable_str(conversation):
