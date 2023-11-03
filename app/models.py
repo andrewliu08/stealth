@@ -16,11 +16,13 @@ class Message:
         content: str = "",
         translation: str = "",
         tts_uri: str = "",
+        tts_task_id: Optional[str] = None,
     ):
         self.sender = sender
         self.content = content
         self.translation = translation
         self.tts_uri = tts_uri
+        self.tts_task_id = tts_task_id
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -28,6 +30,7 @@ class Message:
             "content": self.content,
             "translation": self.translation,
             "tts_uri": self.tts_uri,
+            "tts_task_id": self.tts_task_id,
         }
 
     def to_cacheable_str(self) -> str:
@@ -36,6 +39,7 @@ class Message:
             "content": self.content,
             "translation": self.translation,
             "tts_uri": self.tts_uri,
+            "tts_task_id": self.tts_task_id,
         }
         return str(d)
 
@@ -45,13 +49,15 @@ class Message:
         self.content = d["content"]
         self.translation = d["translation"]
         self.tts_uri = d["tts_uri"] if "tts_uri" in d else ""
+        self.tts_task_id = d["tts_task_id"] if "tts_task_id" in d else None
 
     def __repr__(self) -> str:
-        return "Message(sender={}, content={}, translation={}, tts_uri={})".format(
+        return "Message(sender={}, content={}, translation={}, tts_uri={}, tts_task_id={})".format(
             self.sender,
             self.content,
             self.translation,
             self.tts_uri,
+            self.tts_task_id,
         )
 
 

@@ -22,9 +22,11 @@ from app.models import Conversation, ConversationParticipant, Message
 from app.secret_keys import *
 from app.translation.deepl import deepl_translate
 from app.tts.aws_polly import (
-    create_polly_client,
     extract_file_name_from_output_uri,
+    extract_task_id_from_polly_respnonse,
+    extract_uri_from_polly_response,
     generate_presigned_url,
+    polly_synthesis_task_status,
     polly_tts,
 )
 
@@ -33,6 +35,17 @@ from app.tts.aws_polly import (
 def hello_world():
     resp = {"data": ["Hello World", "x", "y"]}
     return jsonify(resp)
+
+
+@app.route("/tts_task_status", methods=["POST"])
+def tts_task_status():
+    params = request.get_json()
+    task_id = params.get("taskId")
+    if task_id is None:
+        return jsonify(error="Missing parameter"), 400
+
+    task_status = polly_synthesis_task_status(polly_client, task_id)
+    return jsonify({"status": task_status}), 200
 
 
 @app.route("/new_conversation", methods=["POST"])
@@ -55,7 +68,11 @@ def new_conversation():
     combined_message = content + "\n\n" + INTRO_MESSAGE_TRANSLATIONS[user_lang]
     combined_translation = translation + "\n\n" + INTRO_MESSAGE_TRANSLATIONS[resp_lang]
 
-    tts_uri = polly_tts(polly_client, combined_translation, resp_lang, "standard")
+    polly_response = polly_tts(
+        polly_client, combined_translation, resp_lang, "standard"
+    )
+    tts_uri = extract_uri_from_polly_response(polly_response)
+    tts_task_id = extract_task_id_from_polly_respnonse(polly_response)
     file_name = extract_file_name_from_output_uri(tts_uri)
     presigned_tts_url = generate_presigned_url(
         AWS_ACCESS_KEY, AWS_SECRET_ACCESS_KEY, file_name
@@ -66,6 +83,7 @@ def new_conversation():
         content=combined_message,
         translation=combined_translation,
         tts_uri=presigned_tts_url,
+        tts_task_id=tts_task_id,
     )
     conversation = Conversation(
         id=caching.create_conversation_id(),
@@ -102,6 +120,7 @@ def test_new_conversation():
                 "content": "Excuse me, could you help me find the closest hospital?\n\nI am using a translation app. Please speak into the phone when you respond.",
                 "translation": "Excusez-moi, pourriez-vous m'aider à trouver l'hôpital le plus proche ?\n\nJ'utilise une application de traduction. Veuillez parler dans le téléphone lorsque vous répondez.",
                 "tts_uri": presigned_tts_url,
+                "tts_task_id": "e0a6a1b2-e739-4c00-853d-67febd415da2",
             }
         ],
         "user_lang": "english",
@@ -127,7 +146,11 @@ def new_user_message():
         content, conversation.user_lang, conversation.resp_lang, DEEPL_API_KEY
     )
 
-    tts_uri = polly_tts(polly_client, translation, conversation.resp_lang, "standard")
+    polly_response = polly_tts(
+        polly_client, translation, conversation.resp_lang, "standard"
+    )
+    tts_uri = extract_uri_from_polly_response(polly_response)
+    tts_task_id = extract_task_id_from_polly_respnonse(polly_response)
     file_name = extract_file_name_from_output_uri(tts_uri)
     presigned_tts_url = generate_presigned_url(
         AWS_ACCESS_KEY, AWS_SECRET_ACCESS_KEY, file_name
@@ -138,6 +161,7 @@ def new_user_message():
         content=content,
         translation=translation,
         tts_uri=presigned_tts_url,
+        tts_task_id=tts_task_id,
     )
     conversation.new_message(new_message)
     caching.save_conversation(redis_client, conversation)
@@ -169,6 +193,7 @@ def test_new_user_message():
         content=content,
         translation="asdf",
         tts_uri=presigned_tts_url,
+        tts_task_id="asdf",
     )
     # conversation.new_message(new_message)
 
@@ -202,6 +227,7 @@ def test_new_resp_message():
         content="你受伤了吗？",
         translation="Are you hurt?",
         tts_uri=presigned_tts_url,
+        tts_task_id="asdf",
     )
     # conversation.new_message(new_message)
     # caching.save_conversation(redis_client, conversation)
@@ -233,7 +259,11 @@ def new_resp_message():
         transcript, conversation.resp_lang, conversation.user_lang, DEEPL_API_KEY
     )
 
-    tts_uri = polly_tts(polly_client, translation, conversation.user_lang, "standard")
+    polly_response = polly_tts(
+        polly_client, translation, conversation.user_lang, "standard"
+    )
+    tts_uri = extract_uri_from_polly_response(polly_response)
+    tts_task_id = extract_task_id_from_polly_respnonse(polly_response)
     file_name = extract_file_name_from_output_uri(tts_uri)
     presigned_tts_url = generate_presigned_url(
         AWS_ACCESS_KEY, AWS_SECRET_ACCESS_KEY, file_name
@@ -244,6 +274,7 @@ def new_resp_message():
         content=transcript,
         translation=translation,
         tts_uri=presigned_tts_url,
+        tts_task_id=tts_task_id,
     )
     conversation.new_message(new_message)
     caching.save_conversation(redis_client, conversation)

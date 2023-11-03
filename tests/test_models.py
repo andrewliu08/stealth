@@ -11,6 +11,7 @@ def test_message_to_dict(message):
     assert message_dict["content"] == "Hello"
     assert message_dict["translation"] == "Bonjour"
     assert message_dict["tts_uri"] == "bonjour.mp3"
+    assert message_dict["tts_task_id"] == "asdf"
 
 
 def test_message_cacheable_str(message):
@@ -54,6 +55,7 @@ def test_conversation_new_message(conversation):
         content="Au revoir",
         translation="Bye",
         tts_uri="au_revoir.mp3",
+        tts_task_id="a",
     )
     conversation.new_message(new_message)
     assert len(conversation.history) == 2
@@ -62,8 +64,10 @@ def test_conversation_new_message(conversation):
     assert conversation.history[0].content == "Hello"
     assert conversation.history[0].translation == "Bonjour"
     assert conversation.history[0].tts_uri == "bonjour.mp3"
+    assert conversation.history[0].tts_task_id == "asdf"
 
     assert conversation.history[1].sender == ConversationParticipant.RESPONDENT
     assert conversation.history[1].content == "Au revoir"
     assert conversation.history[1].translation == "Bye"
     assert conversation.history[1].tts_uri == "au_revoir.mp3"
+    assert conversation.history[1].tts_task_id == "a"

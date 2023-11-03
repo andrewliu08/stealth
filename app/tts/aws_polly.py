@@ -24,6 +24,11 @@ def create_polly_client(
     ).client("polly")
 
 
+def extract_task_id_from_polly_respnonse(response: Dict[str, Any]) -> str:
+    task_id = response["SynthesisTask"]["TaskId"]
+    return task_id
+
+
 def extract_uri_from_polly_response(response: Dict[str, Any]) -> str:
     output_uri = response["SynthesisTask"]["OutputUri"]
     return output_uri
@@ -58,7 +63,7 @@ def polly_tts(
         Text=text,
     )
 
-    return extract_uri_from_polly_response(response)
+    return response
 
 
 def polly_synthesis_task_status(polly_client: boto3.client, task_id: str) -> str:

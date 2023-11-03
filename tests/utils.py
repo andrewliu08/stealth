@@ -4,6 +4,7 @@ def messages_equal(message1, message2):
         and message1.content == message2.content
         and message1.translation == message2.translation
         and message1.tts_uri == message2.tts_uri
+        and message1.tts_task_id == message2.tts_task_id
     )
 
 
