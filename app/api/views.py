@@ -75,7 +75,6 @@ def new_conversation():
         resp_lang=resp_lang,
     )
     caching.save_conversation(redis_client, conversation)
-    print(conversation.to_dict())
 
     return jsonify(conversation.to_dict()), 200
 
@@ -95,18 +94,18 @@ def test_new_conversation():
     )
 
     conversation_dict = {
+        "id": "a66e89f7-a440-4122-af1b-5cb67fd86c5c",
+        "intro_message": "I am using a translation app. Please speak into the phone when you respond.",
         "history": [
             {
-                "content": "Hello everyone!\n\nI am using a translation app. Please speak into the phone when you respond",
                 "sender": "user",
-                "translation": "Bonjour \u00e0 tous!\n\nJ'utilise une application de traduction. Veuillez parler dans le t\u00e9l\u00e9phone lorsque vous r\u00e9pondez.",
+                "content": "Excuse me, could you help me find the closest hospital?\n\nI am using a translation app. Please speak into the phone when you respond.",
+                "translation": "Excusez-moi, pourriez-vous m'aider à trouver l'hôpital le plus proche ?\n\nJ'utilise une application de traduction. Veuillez parler dans le téléphone lorsque vous répondez.",
                 "tts_uri": presigned_tts_url,
             }
         ],
-        "id": "7c551128-cd87-4a81-af24-d89b946cc2fb",
-        "intro_message": "I am using a translation app. Please speak into the phone when you respond",
-        "resp_lang": "French",
-        "user_lang": "English",
+        "user_lang": "english",
+        "resp_lang": "french",
     }
     return jsonify(conversation_dict), 200
 
@@ -157,9 +156,9 @@ def test_new_user_message():
         return jsonify(error="Missing parameter"), 400
     conversation_id = conversation_id.lower()
 
-    conversation = caching.get_conversation(redis_client, conversation_id)
-    if conversation is None:
-        return jsonify(error="Conversation not found"), 404
+    # conversation = caching.get_conversation(redis_client, conversation_id)
+    # if conversation is None:
+    #     return jsonify(error="Conversation not found"), 404
 
     presigned_tts_url = generate_presigned_url(
         AWS_ACCESS_KEY, AWS_SECRET_ACCESS_KEY, test_tts_object
@@ -171,17 +170,9 @@ def test_new_user_message():
         translation="asdf",
         tts_uri=presigned_tts_url,
     )
-    conversation.new_message(new_message)
+    # conversation.new_message(new_message)
 
     return jsonify(new_message.to_dict()), 200
-
-
-def allowed_file(filename):
-    return (
-        filename != ""
-        and "." in filename
-        and filename.rsplit(".", 1)[1].lower() in ["m4a"]
-    )
 
 
 @app.route("/test_new_resp_message", methods=["POST"])
@@ -190,16 +181,15 @@ def test_new_resp_message():
     file = request.files.get("file")
     if conversation_id is None or file is None:
         return jsonify(error="Missing parameter"), 400
-    if not allowed_file(file.filename):
+    if not api_utils.allowed_audio_file(file.filename):
         return jsonify(error="Invalid file name"), 400
 
     conversation_id = conversation_id.lower()
-    conversation = caching.get_conversation(redis_client, conversation_id)
-    if conversation is None:
-        return jsonify(error="Conversation not found"), 404
+    # conversation = caching.get_conversation(redis_client, conversation_id)
+    # if conversation is None:
+    #     return jsonify(error="Conversation not found"), 404
 
-    file_path = os.path.join("temp", file.filename)
-    file.save(file_path)
+    api_utils.save_resp_audio(file, file.filename)
 
     time.sleep(3)
 
@@ -213,8 +203,8 @@ def test_new_resp_message():
         translation="Are you hurt?",
         tts_uri=presigned_tts_url,
     )
-    conversation.new_message(new_message)
-    caching.save_conversation(redis_client, conversation)
+    # conversation.new_message(new_message)
+    # caching.save_conversation(redis_client, conversation)
 
     return jsonify(new_message.to_dict()), 200
 
@@ -225,7 +215,7 @@ def new_resp_message():
     file = request.files.get("file")
     if conversation_id is None or file is None:
         return jsonify(error="Missing parameter"), 400
-    if not allowed_file(file.filename):
+    if not api_utils.allowed_audio_file(file.filename):
         return jsonify(error="Invalid file name"), 400
 
     conversation_id = conversation_id.lower()
@@ -233,19 +223,15 @@ def new_resp_message():
     if conversation is None:
         return jsonify(error="Conversation not found"), 404
 
-    file_path = os.path.join("temp", conversation_id + "_" + file.filename)
-    file.save(file_path)
+    file_path = api_utils.save_resp_audio(file, conversation_id + "_" + file.filename)
 
     transcript = speechmatics_live_avr(
         SPEECHMATICS_API_KEY, conversation.resp_lang, file_path
     )
-    print(file_path)
-    print(transcript)
 
     translation = deepl_translate(
         transcript, conversation.resp_lang, conversation.user_lang, DEEPL_API_KEY
     )
-    print(translation)
 
     tts_uri = polly_tts(polly_client, translation, conversation.user_lang, "standard")
     file_name = extract_file_name_from_output_uri(tts_uri)
@@ -260,17 +246,9 @@ def new_resp_message():
         tts_uri=presigned_tts_url,
     )
     conversation.new_message(new_message)
-    # caching.save_conversation(redis_client, conversation)
+    caching.save_conversation(redis_client, conversation)
 
     return jsonify(new_message.to_dict()), 200
-
-
-def format_response_options(options: List[Tuple[str, str]]) -> dict:
-    option_dicts = [
-        {"resp_lang_content": option[0], "user_lang_content": option[1]}
-        for option in options
-    ]
-    return {"options": option_dicts}
 
 
 @app.route("/response_options", methods=["POST"])
@@ -293,7 +271,7 @@ def response_options():
     print(gpt_message)
     options = parse_options(gpt_message)
 
-    return jsonify(format_response_options(options)), 200
+    return jsonify(api_utils.format_response_options(options)), 200
 
 
 @app.route("/test_response_options", methods=["POST"])
@@ -304,12 +282,12 @@ def test_response_options():
         return jsonify(error="Missing parameter"), 400
 
     conversation_id = conversation_id.lower()
-    conversation = caching.get_conversation(redis_client, conversation_id)
-    if conversation is None:
-        return jsonify(error="Conversation not found"), 404
+    # conversation = caching.get_conversation(redis_client, conversation_id)
+    # if conversation is None:
+    #     return jsonify(error="Conversation not found"), 404
 
-    prompt = get_prompt(conversation, num_response_options=3)
-    print("prompt:", prompt)
+    # prompt = get_prompt(conversation, num_response_options=3)
+    # print("prompt:", prompt)
     time.sleep(3)
     response_content = """Option 1:
 "Je vais à Amsterdam."
@@ -325,7 +303,7 @@ Option 3:
 """
     options = parse_options(response_content)
 
-    return jsonify(format_response_options(options)), 200
+    return jsonify(api_utils.format_response_options(options)), 200
 
 
 @app.route("/test", methods=["POST"])
@@ -352,7 +330,7 @@ def upload_file():
         return "No selected file", 401
     print("has selected file")
     print(file.filename)
-    if not allowed_file(file.filename):
+    if not api_utils.allowed_audio_file(file.filename):
         return "Invalid file name", 401
     print("valid file name")
 
