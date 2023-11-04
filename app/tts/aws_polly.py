@@ -4,10 +4,33 @@ import boto3
 
 from app.constants.language import Language
 
+
+# https://docs.aws.amazon.com/polly/latest/dg/voicelist.html
 AWS_POLLY_LANG_TO_VOICE: Dict[Language, str] = {
+    Language.ARABIC: "Zeina",
+    Language.CANTONESE: "Hiujin",
+    Language.CATALAN: "Lisa",
+    Language.DANISH: "Mads",
+    Language.DUTCH: "Ruben",
     Language.ENGLISH: "Matthew",
+    Language.FINNISH: "Suvi",
     Language.FRENCH: "Lea",
+    Language.GERMAN: "Hans",
+    Language.HINDI: "Aditi",
+    Language.ICELANDIC: "Karl",
+    Language.ITALIAN: "Giorgio",
+    Language.JAPANESE: "Takumi",
+    Language.KOREAN: "Seoyeon",
     Language.MANDARIN: "Zhiyu",
+    Language.NORWEGIAN: "Liv",
+    Language.POLISH: "Jan",
+    Language.PORTUGUESE: "Cristiano",
+    Language.ROMANIAN: "Carmen",
+    Language.RUSSIAN: "Maxim",
+    Language.SPANISH: "Enrique",
+    Language.SWEDISH: "Astrid",
+    Language.TURKISH: "Filiz",
+    Language.WELSH: "Gwyneth",
 }
 
 SAVED_POLLY_OUTPUT_BUCKET_NAME = "shuopolly"

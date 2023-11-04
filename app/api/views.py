@@ -9,6 +9,7 @@ from app.api import api_utils
 from app.app import app, redis_client, polly_client, test_tts_object
 from app.avr.speechmatics import speechmatics_live_avr
 from app.constants.intro_messages import INTRO_MESSAGE_TRANSLATIONS
+from app.constants.starter_messages import STARTER_MESSAGE_TRANSLATIONS
 from app.generative.prompts import get_prompt
 from app.generative.openai_gpt import (
     extract_message_from_openai_response,
@@ -35,6 +36,21 @@ from app.tts.aws_polly import (
 def hello_world():
     resp = {"data": ["Hello World", "x", "y"]}
     return jsonify(resp)
+
+
+@app.route("/starter_messages", methods=["GET"])
+def starter_messages():
+    lang = request.args.get("lang")
+    if lang is None:
+        return jsonify(error="Missing parameter"), 400
+
+    try:
+        lang = api_utils.parse_language(lang)
+        messages = STARTER_MESSAGE_TRANSLATIONS[lang]
+    except ValueError:
+        return jsonify(error="Invalid language"), 400
+
+    return jsonify({"starter_messages": messages}), 200
 
 
 @app.route("/tts_task_status", methods=["POST"])
