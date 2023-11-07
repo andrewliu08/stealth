@@ -1,20 +1,19 @@
-import os
-import time
-from typing import List, Tuple
+import json
 
-from flask import Flask, request, jsonify
+from flask import Response, request, jsonify, stream_with_context
 
 from app import caching
 from app.api import api_utils
-from app.app import app, redis_client, polly_client, test_tts_object
+from app.app import app, redis_client, polly_client
 from app.avr.speechmatics import speechmatics_live_avr
 from app.constants.intro_messages import INTRO_MESSAGE_TRANSLATIONS
 from app.constants.starter_messages import STARTER_MESSAGE_TRANSLATIONS
-from app.generative.prompts import get_prompt
+from app.generative.prompts import get_prompt, get_prompt_with_translations
 from app.generative.openai_gpt import (
+    OpenAIReponseOptionStreamDFA,
     extract_message_from_openai_response,
     gpt_responses,
-    parse_options,
+    parse_options_with_translations,
     set_api_key,
 )
 from app.models import Conversation, ConversationParticipant, Message
@@ -30,12 +29,6 @@ from app.tts.aws_polly import (
     polly_synthesis_task_status,
     polly_tts,
 )
-
-
-@app.route("/")
-def hello_world():
-    resp = {"data": ["Hello World", "x", "y"]}
-    return jsonify(resp)
 
 
 @app.route("/starter_messages", methods=["GET"])
@@ -113,38 +106,6 @@ def new_conversation():
     return jsonify(conversation.to_dict()), 200
 
 
-@app.route("/test_new_conversation", methods=["POST"])
-def test_new_conversation():
-    params = request.get_json()
-    content = params.get("content")
-    user_lang = params.get("userLang")
-    resp_lang = params.get("respLang")
-    print(content)
-    print(user_lang)
-    print(resp_lang)
-
-    presigned_tts_url = generate_presigned_url(
-        AWS_ACCESS_KEY, AWS_SECRET_ACCESS_KEY, test_tts_object
-    )
-
-    conversation_dict = {
-        "id": "a66e89f7-a440-4122-af1b-5cb67fd86c5c",
-        "intro_message": "I am using a translation app. Please speak into the phone when you respond.",
-        "history": [
-            {
-                "sender": "user",
-                "content": "Excuse me, could you help me find the closest hospital?\n\nI am using a translation app. Please speak into the phone when you respond.",
-                "translation": "Excusez-moi, pourriez-vous m'aider à trouver l'hôpital le plus proche ?\n\nJ'utilise une application de traduction. Veuillez parler dans le téléphone lorsque vous répondez.",
-                "tts_uri": presigned_tts_url,
-                "tts_task_id": "e0a6a1b2-e739-4c00-853d-67febd415da2",
-            }
-        ],
-        "user_lang": "english",
-        "resp_lang": "french",
-    }
-    return jsonify(conversation_dict), 200
-
-
 @app.route("/new_user_message", methods=["POST"])
 def new_user_message():
     params = request.get_json()
@@ -181,72 +142,6 @@ def new_user_message():
     )
     conversation.new_message(new_message)
     caching.save_conversation(redis_client, conversation)
-
-    return jsonify(new_message.to_dict()), 200
-
-
-@app.route("/test_new_user_message", methods=["POST"])
-def test_new_user_message():
-    params = request.get_json()
-    conversation_id = params.get("conversationId")
-    content = params.get("content")
-    print("conversation_id:", conversation_id)
-    print("content:", content)
-    if conversation_id is None or content is None:
-        return jsonify(error="Missing parameter"), 400
-    conversation_id = conversation_id.lower()
-
-    # conversation = caching.get_conversation(redis_client, conversation_id)
-    # if conversation is None:
-    #     return jsonify(error="Conversation not found"), 404
-
-    presigned_tts_url = generate_presigned_url(
-        AWS_ACCESS_KEY, AWS_SECRET_ACCESS_KEY, test_tts_object
-    )
-
-    new_message = Message(
-        sender=ConversationParticipant.USER,
-        content=content,
-        translation="asdf",
-        tts_uri=presigned_tts_url,
-        tts_task_id="asdf",
-    )
-    # conversation.new_message(new_message)
-
-    return jsonify(new_message.to_dict()), 200
-
-
-@app.route("/test_new_resp_message", methods=["POST"])
-def test_new_resp_message():
-    conversation_id = request.form.get("conversationId")
-    file = request.files.get("file")
-    if conversation_id is None or file is None:
-        return jsonify(error="Missing parameter"), 400
-    if not api_utils.allowed_audio_file(file.filename):
-        return jsonify(error="Invalid file name"), 400
-
-    conversation_id = conversation_id.lower()
-    # conversation = caching.get_conversation(redis_client, conversation_id)
-    # if conversation is None:
-    #     return jsonify(error="Conversation not found"), 404
-
-    api_utils.save_resp_audio(file, file.filename)
-
-    time.sleep(3)
-
-    presigned_tts_url = generate_presigned_url(
-        AWS_ACCESS_KEY, AWS_SECRET_ACCESS_KEY, test_tts_object
-    )
-
-    new_message = Message(
-        sender=ConversationParticipant.RESPONDENT,
-        content="你受伤了吗？",
-        translation="Are you hurt?",
-        tts_uri=presigned_tts_url,
-        tts_task_id="asdf",
-    )
-    # conversation.new_message(new_message)
-    # caching.save_conversation(redis_client, conversation)
 
     return jsonify(new_message.to_dict()), 200
 
@@ -310,76 +205,45 @@ def response_options():
     if conversation is None:
         return jsonify(error="Conversation not found"), 404
 
-    prompt = get_prompt(conversation, num_response_options=3)
+    prompt = get_prompt_with_translations(conversation, num_response_options=3)
     print(prompt)
     set_api_key(OPENAI_API_KEY)
     response = gpt_responses(prompt, stream=False)
     gpt_message = extract_message_from_openai_response(response)
     print(gpt_message)
-    options = parse_options(gpt_message)
+    options = parse_options_with_translations(gpt_message)
 
     return jsonify(api_utils.format_response_options(options)), 200
 
 
-@app.route("/test_response_options", methods=["POST"])
-def test_response_options():
-    params = request.get_json()
-    conversation_id = params.get("conversationId")
+@app.route("/response_options_stream", methods=["GET"])
+def response_options_stream():
+    parser = OpenAIReponseOptionStreamDFA()
+
+    def generate(prompt):
+        response_stream = gpt_responses(prompt, stream=True)
+        for chunk in response_stream:
+            events = parser.process_chunk(chunk)
+            for event in events:
+                yield f"data: {json.dumps(event)}\n\n"
+
+        print("".join(parser.response_chars))
+        for start_idx, end_idx in parser.message_idx:
+            print("".join(parser.response_chars[start_idx:end_idx]))
+
+    conversation_id = request.args.get("conversationId")
     if conversation_id is None:
         return jsonify(error="Missing parameter"), 400
 
     conversation_id = conversation_id.lower()
-    # conversation = caching.get_conversation(redis_client, conversation_id)
-    # if conversation is None:
-    #     return jsonify(error="Conversation not found"), 404
+    conversation = caching.get_conversation(redis_client, conversation_id)
+    if conversation is None:
+        return jsonify(error="Conversation not found"), 404
 
-    # prompt = get_prompt(conversation, num_response_options=3)
-    # print("prompt:", prompt)
-    time.sleep(3)
-    response_content = """Option 1:
-"Je vais à Amsterdam."
-"I'm going to Amsterdam."
+    prompt = get_prompt(conversation, num_response_options=3)
+    print(prompt)
+    set_api_key(OPENAI_API_KEY)
 
-Option 2:
-"Je n'ai pas encore décidé de la ville exacte."
-"I haven't decided on the exact city yet."
-
-Option 3:
-"Ma destination est Rotterdam."
-"My destination is Rotterdam."
-"""
-    options = parse_options(response_content)
-
-    return jsonify(api_utils.format_response_options(options)), 200
-
-
-@app.route("/test", methods=["POST"])
-def test():
-    conversation_id = request.form.get("conversationId")
-    print("conversation_id:", conversation_id)
-    return jsonify({"conversation_id": conversation_id}), 200
-
-
-@app.route("/upload", methods=["POST"])
-def upload_file():
-    print("Hi")
-    print("request.files", request.files)
-    print("request.form", request.form)
-    conversation_id = request.form.get("conversationId")
-    print("conversation_id:", conversation_id)
-    if "file" not in request.files:
-        return "No file part", 400
-
-    print("Has file part")
-
-    file = request.files["file"]
-    if file is None:
-        return "No selected file", 401
-    print("has selected file")
-    print(file.filename)
-    if not api_utils.allowed_audio_file(file.filename):
-        return "Invalid file name", 401
-    print("valid file name")
-
-    file.save(os.path.join("temp", file.filename))
-    return jsonify({"conversation_id": "asdf"}), 200
+    return Response(
+        stream_with_context(generate(prompt)), content_type="text/event-stream"
+    )

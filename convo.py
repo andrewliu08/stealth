@@ -67,9 +67,9 @@ def get_conversation_string(conversation_history):
     conversation_str = ""
     for i, turn in enumerate(conversation_history):
         if i % 2 == 0:
-            conversation_str += f'You: {turn}\n'
+            conversation_str += f"You: {turn}\n"
         else:
-            conversation_str += f'Other: {turn}\n'
+            conversation_str += f"Other: {turn}\n"
     return conversation_str
 
 

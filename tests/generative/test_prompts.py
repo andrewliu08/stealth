@@ -1,5 +1,8 @@
-from app.constants.language import Language
-from app.generative.prompts import get_conversation_turns, get_prompt
+from app.generative.prompts import (
+    get_conversation_turns,
+    get_prompt,
+    get_prompt_with_translations,
+)
 from app.models import ConversationParticipant, Message
 from tests.fixtures import (
     conversation,
@@ -31,7 +34,7 @@ def test_get_conversation_turns_remove_intro_message(conversation):
     assert conversation_turns == ["You:\nBonjour"]
 
 
-def test_get_prompt(conversation):
+def test_prompt(conversation):
     resp_message = Message(
         sender=ConversationParticipant.RESPONDENT,
         content="Salut! Comment ca va?",
@@ -40,6 +43,39 @@ def test_get_prompt(conversation):
     conversation.history.append(resp_message)
 
     prompt = get_prompt(conversation, num_response_options=3)
+    expected_prompt = '''You are a fluent french speaker having a conversation in french. The conversation so far is in triple quotes:
+"""
+You:
+Bonjour
+
+Other:
+Salut! Comment ca va?
+"""
+Provide 3 options for what you might say to the other person translated to english. Follow the format in the triple quotes:
+"""
+<Start>
+"<Response 1 in english>"
+<End>
+<Start>
+"<Response 2 in english>"
+<End>
+<Start>
+"<Response 3 in english>"
+<End>
+"""
+'''
+    assert prompt == expected_prompt
+
+
+def test_prompt_with_translations(conversation):
+    resp_message = Message(
+        sender=ConversationParticipant.RESPONDENT,
+        content="Salut! Comment ca va?",
+        translation="Hi! How are you?",
+    )
+    conversation.history.append(resp_message)
+
+    prompt = get_prompt_with_translations(conversation, num_response_options=3)
     expected_prompt = '''You are a fluent french speaker having a conversation in french. The conversation so far is in triple quotes:
 """
 You:
@@ -66,8 +102,8 @@ Option 3:
     assert prompt == expected_prompt
 
 
-def test_get_prompt1(two_message_mandarin_french_conversation):
-    prompt = get_prompt(
+def test_prompt_with_translations1(two_message_mandarin_french_conversation):
+    prompt = get_prompt_with_translations(
         two_message_mandarin_french_conversation, num_response_options=3
     )
     expected_prompt = '''You are a fluent mandarin speaker having a conversation in mandarin. The conversation so far is in triple quotes:

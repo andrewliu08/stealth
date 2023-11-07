@@ -3,7 +3,8 @@ from typing import List
 from app.constants.intro_messages import INTRO_MESSAGE_TRANSLATIONS
 from app.constants.gpt_prompts import (
     RESPONSE_OPTIONS_PROMPT,
-    RESPONSE_OPTIONS_WITH_GOAL_PROMPT,
+    RESPONSE_OPTIONS_PROMPT_WITH_TRANSLATIONS,
+    RESPONSE_OPTIONS_PROMPT_WITH_TRANSLATIONS_AND_GOAL,
 )
 from app.models import Conversation, ConversationParticipant
 
@@ -27,24 +28,7 @@ def get_conversation_turns(conversation: Conversation) -> List[str]:
     return history
 
 
-def get_prompt_with_goal(
-    goal: str,
-    conversation: Conversation,
-    num_response_options: int,
-) -> str:
-    """Create the prompt used to get potential responses from GPT"""
-    history = get_conversation_turns(conversation)
-    history_str = "\n\n".join(history)
-    prompt = RESPONSE_OPTIONS_WITH_GOAL_PROMPT.format(
-        conversation.resp_lang.value, goal, history_str, num_response_options
-    )
-    return prompt
-
-
-def get_prompt(
-    conversation: Conversation,
-    num_response_options: int,
-) -> str:
+def get_prompt(conversation: Conversation, num_response_options: int) -> str:
     """Create the prompt used to get potential responses from GPT"""
     history = get_conversation_turns(conversation)
     history_str = "\n\n".join(history)
@@ -53,5 +37,35 @@ def get_prompt(
         conversation.user_lang.value,
         history_str,
         num_response_options,
+    )
+    return prompt
+
+
+def get_prompt_with_translations(
+    conversation: Conversation,
+    num_response_options: int,
+) -> str:
+    """Create the prompt used to get potential responses from GPT"""
+    history = get_conversation_turns(conversation)
+    history_str = "\n\n".join(history)
+    prompt = RESPONSE_OPTIONS_PROMPT_WITH_TRANSLATIONS.format(
+        conversation.resp_lang.value,
+        conversation.user_lang.value,
+        history_str,
+        num_response_options,
+    )
+    return prompt
+
+
+def get_prompt_with_translations_and_goal(
+    goal: str,
+    conversation: Conversation,
+    num_response_options: int,
+) -> str:
+    """Create the prompt used to get potential responses from GPT"""
+    history = get_conversation_turns(conversation)
+    history_str = "\n\n".join(history)
+    prompt = RESPONSE_OPTIONS_PROMPT_WITH_TRANSLATIONS_AND_GOAL.format(
+        conversation.resp_lang.value, goal, history_str, num_response_options
     )
     return prompt
