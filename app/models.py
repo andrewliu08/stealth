@@ -12,12 +12,14 @@ class ConversationParticipant(Enum):
 class Message:
     def __init__(
         self,
+        id: str = "",
         sender: Optional[ConversationParticipant] = None,
         content: str = "",
         translation: str = "",
         tts_uri: str = "",
         tts_task_id: Optional[str] = None,
     ):
+        self.id = id
         self.sender = sender
         self.content = content
         self.translation = translation
@@ -26,6 +28,7 @@ class Message:
 
     def to_dict(self) -> Dict[str, Any]:
         return {
+            "id": self.id,
             "sender": self.sender.value,
             "content": self.content,
             "translation": self.translation,
@@ -35,6 +38,7 @@ class Message:
 
     def to_cacheable_str(self) -> str:
         d = {
+            "id": self.id,
             "sender": self.sender.value,
             "content": self.content,
             "translation": self.translation,
@@ -45,6 +49,7 @@ class Message:
 
     def from_cacheable_str(self, s: str):
         d = eval(s)
+        self.id = d["id"]
         self.sender = ConversationParticipant(d["sender"])
         self.content = d["content"]
         self.translation = d["translation"]
@@ -52,7 +57,8 @@ class Message:
         self.tts_task_id = d["tts_task_id"] if "tts_task_id" in d else None
 
     def __repr__(self) -> str:
-        return "Message(sender={}, content={}, translation={}, tts_uri={}, tts_task_id={})".format(
+        return "Message(id={}, sender={}, content={}, translation={}, tts_uri={}, tts_task_id={})".format(
+            self.id,
             self.sender,
             self.content,
             self.translation,
@@ -78,6 +84,15 @@ class Conversation:
 
     def new_message(self, message: Message):
         self.history.append(message)
+
+    def delete_message(self, message_id: str) -> bool:
+        """Delete message with id `message_id` and all subsequent messages"""
+        for i, message in enumerate(self.history):
+            if message.id == message_id:
+                self.history = self.history[:i]
+                return True
+
+        return False
 
     def to_dict(self) -> Dict[str, Any]:
         return {

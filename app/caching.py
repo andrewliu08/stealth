@@ -27,7 +27,7 @@ def create_redis_client(host, port):
     return MockRedisClient(host=host, port=port)
 
 
-def create_conversation_id():
+def create_id():
     return str(uuid.uuid4())
 
 

@@ -7,6 +7,7 @@ from app.models import Conversation, ConversationParticipant, Message
 @pytest.fixture
 def message():
     message = Message(
+        id="2f76f523-3989-44b2-b335-011f7dbcdfc7",
         sender=ConversationParticipant.USER,
         content="Hello",
         translation="Bonjour",

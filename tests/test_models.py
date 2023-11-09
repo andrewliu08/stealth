@@ -7,6 +7,7 @@ def test_message_to_dict(message):
     message_dict = message.to_dict()
     assert isinstance(message_dict, dict)
 
+    assert message_dict["id"] == "2f76f523-3989-44b2-b335-011f7dbcdfc7"
     assert message_dict["sender"] == "user"
     assert message_dict["content"] == "Hello"
     assert message_dict["translation"] == "Bonjour"
@@ -31,9 +32,14 @@ def test_conversation_to_dict(conversation):
     assert conversation_dict["id"] == "614d7b95-1ce8-49e5-abc2-4357f91a6ae1"
     assert len(conversation_dict["history"]) == 1
 
+    assert (
+        conversation_dict["history"][0]["id"] == "2f76f523-3989-44b2-b335-011f7dbcdfc7"
+    )
+    assert conversation_dict["history"][0]["sender"] == "user"
     assert conversation_dict["history"][0]["content"] == "Hello"
     assert conversation_dict["history"][0]["translation"] == "Bonjour"
     assert conversation_dict["history"][0]["tts_uri"] == "bonjour.mp3"
+    assert conversation_dict["history"][0]["tts_task_id"] == "asdf"
 
     assert conversation_dict["user_lang"] == "english"
     assert conversation_dict["resp_lang"] == "french"
@@ -71,3 +77,17 @@ def test_conversation_new_message(conversation):
     assert conversation.history[1].translation == "Bye"
     assert conversation.history[1].tts_uri == "au_revoir.mp3"
     assert conversation.history[1].tts_task_id == "a"
+
+
+def test_conversation_delete_message_success(conversation):
+    successfully_deleted = conversation.delete_message(
+        "2f76f523-3989-44b2-b335-011f7dbcdfc7"
+    )
+    assert len(conversation.history) == 0
+    assert successfully_deleted
+
+
+def test_conversation_delete_message_failure(conversation):
+    successfully_deleted = conversation.delete_message("a")
+    assert len(conversation.history) == 1
+    assert not successfully_deleted

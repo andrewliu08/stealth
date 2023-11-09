@@ -6,6 +6,7 @@ from app import caching
 from app.api import api_utils
 from app.app import app, redis_client, polly_client
 from app.avr.speechmatics import speechmatics_live_avr
+from app.constants.fixed_response_options import FIXED_RESPONSE_OPTIONS
 from app.constants.intro_messages import INTRO_MESSAGE_TRANSLATIONS
 from app.constants.starter_messages import STARTER_MESSAGE_TRANSLATIONS
 from app.generative.prompts import get_prompt, get_prompt_with_translations
@@ -23,7 +24,7 @@ from app.secret_keys import *
 from app.translation.deepl import deepl_translate
 from app.tts.aws_polly import (
     extract_file_name_from_output_uri,
-    extract_task_id_from_polly_respnonse,
+    extract_task_id_from_polly_response,
     extract_uri_from_polly_response,
     generate_presigned_url,
     polly_synthesis_task_status,
@@ -81,13 +82,14 @@ def new_conversation():
         polly_client, combined_translation, resp_lang, "standard"
     )
     tts_uri = extract_uri_from_polly_response(polly_response)
-    tts_task_id = extract_task_id_from_polly_respnonse(polly_response)
+    tts_task_id = extract_task_id_from_polly_response(polly_response)
     file_name = extract_file_name_from_output_uri(tts_uri)
     presigned_tts_url = generate_presigned_url(
         AWS_ACCESS_KEY, AWS_SECRET_ACCESS_KEY, file_name
     )
 
     new_message = Message(
+        id=caching.create_id(),
         sender=ConversationParticipant.USER,
         content=combined_message,
         translation=combined_translation,
@@ -95,7 +97,7 @@ def new_conversation():
         tts_task_id=tts_task_id,
     )
     conversation = Conversation(
-        id=caching.create_conversation_id(),
+        id=caching.create_id(),
         intro_message=INTRO_MESSAGE_TRANSLATIONS[user_lang],
         history=[new_message],
         user_lang=user_lang,
@@ -127,13 +129,14 @@ def new_user_message():
         polly_client, translation, conversation.resp_lang, "standard"
     )
     tts_uri = extract_uri_from_polly_response(polly_response)
-    tts_task_id = extract_task_id_from_polly_respnonse(polly_response)
+    tts_task_id = extract_task_id_from_polly_response(polly_response)
     file_name = extract_file_name_from_output_uri(tts_uri)
     presigned_tts_url = generate_presigned_url(
         AWS_ACCESS_KEY, AWS_SECRET_ACCESS_KEY, file_name
     )
 
     new_message = Message(
+        id=caching.create_id(),
         sender=ConversationParticipant.USER,
         content=content,
         translation=translation,
@@ -174,13 +177,14 @@ def new_resp_message():
         polly_client, translation, conversation.user_lang, "standard"
     )
     tts_uri = extract_uri_from_polly_response(polly_response)
-    tts_task_id = extract_task_id_from_polly_respnonse(polly_response)
+    tts_task_id = extract_task_id_from_polly_response(polly_response)
     file_name = extract_file_name_from_output_uri(tts_uri)
     presigned_tts_url = generate_presigned_url(
         AWS_ACCESS_KEY, AWS_SECRET_ACCESS_KEY, file_name
     )
 
     new_message = Message(
+        id=caching.create_id(),
         sender=ConversationParticipant.RESPONDENT,
         content=transcript,
         translation=translation,
@@ -191,6 +195,28 @@ def new_resp_message():
     caching.save_conversation(redis_client, conversation)
 
     return jsonify(new_message.to_dict()), 200
+
+
+@app.route("/delete_message", methods=["POST"])
+def delete_message():
+    params = request.get_json()
+    conversation_id = params.get("conversationId")
+    message_id = params.get("messageId")
+    if conversation_id is None or message_id is None:
+        return jsonify(error="Missing parameter"), 400
+
+    conversation_id = conversation_id.lower()
+    message_id = message_id.lower()
+    conversation = caching.get_conversation(redis_client, conversation_id)
+    if conversation is None:
+        return jsonify(error="Conversation not found"), 404
+
+    successfully_deleted = conversation.delete_message(message_id)
+    if not successfully_deleted:
+        return jsonify(error="Message not found"), 404
+    caching.save_conversation(redis_client, conversation)
+
+    return jsonify({}), 200
 
 
 @app.route("/response_options", methods=["POST"])
@@ -218,19 +244,6 @@ def response_options():
 
 @app.route("/response_options_stream", methods=["GET"])
 def response_options_stream():
-    parser = OpenAIReponseOptionStreamDFA()
-
-    def generate(prompt):
-        response_stream = gpt_responses(prompt, stream=True)
-        for chunk in response_stream:
-            events = parser.process_chunk(chunk)
-            for event in events:
-                yield f"data: {json.dumps(event)}\n\n"
-
-        print("".join(parser.response_chars))
-        for start_idx, end_idx in parser.message_idx:
-            print("".join(parser.response_chars[start_idx:end_idx]))
-
     conversation_id = request.args.get("conversationId")
     if conversation_id is None:
         return jsonify(error="Missing parameter"), 400
@@ -239,6 +252,24 @@ def response_options_stream():
     conversation = caching.get_conversation(redis_client, conversation_id)
     if conversation is None:
         return jsonify(error="Conversation not found"), 404
+
+    def generate(prompt):
+        for response in FIXED_RESPONSE_OPTIONS[conversation.user_lang]:
+            response_event = {"event": "message", "data": response}
+            end_event = {"event": "end"}
+            yield f"data: {json.dumps(response_event)}\n\n"
+            yield f"data: {json.dumps(end_event)}\n\n"
+
+        response_stream = gpt_responses(prompt, stream=True)
+        parser = OpenAIReponseOptionStreamDFA()
+        for chunk in response_stream:
+            events = parser.process_chunk(chunk)
+            for event in events:
+                yield f"data: {json.dumps(event)}\n\n"
+
+        print("".join(parser.response_chars))
+        for start_idx, end_idx in parser.message_idx:
+            print("".join(parser.response_chars[start_idx:end_idx]))
 
     prompt = get_prompt(conversation, num_response_options=3)
     print(prompt)

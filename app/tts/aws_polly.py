@@ -47,7 +47,7 @@ def create_polly_client(
     ).client("polly")
 
 
-def extract_task_id_from_polly_respnonse(response: Dict[str, Any]) -> str:
+def extract_task_id_from_polly_response(response: Dict[str, Any]) -> str:
     task_id = response["SynthesisTask"]["TaskId"]
     return task_id
 

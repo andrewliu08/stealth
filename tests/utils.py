@@ -1,6 +1,7 @@
 def messages_equal(message1, message2):
     return (
-        message1.sender == message2.sender
+        message1.id == message2.id
+        and message1.sender == message2.sender
         and message1.content == message2.content
         and message1.translation == message2.translation
         and message1.tts_uri == message2.tts_uri

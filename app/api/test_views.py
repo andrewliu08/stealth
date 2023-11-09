@@ -1,10 +1,13 @@
 import json
 import time
+from app.constants.language import Language
 
 from flask import Response, request, jsonify, stream_with_context
 
+from app import caching
 from app.api import api_utils
 from app.app import app, test_tts_object
+from app.constants.fixed_response_options import FIXED_RESPONSE_OPTIONS
 from app.generative.openai_gpt import (
     OpenAIReponseOptionStreamDFA,
     parse_options_with_translations,
@@ -43,6 +46,7 @@ def test_new_conversation():
         "intro_message": "I am using a translation app. Please speak into the phone when you respond.",
         "history": [
             {
+                "id": "5fbec385-368b-4762-bcc4-eb03d50db9fc",
                 "sender": "user",
                 "content": "Excuse me, could you help me find the closest hospital?\n\nI am using a translation app. Please speak into the phone when you respond.",
                 "translation": "Excusez-moi, pourriez-vous m'aider à trouver l'hôpital le plus proche ?\n\nJ'utilise une application de traduction. Veuillez parler dans le téléphone lorsque vous répondez.",
@@ -74,11 +78,12 @@ def test_new_user_message():
     )
 
     new_message = Message(
+        id=caching.create_id(),
         sender=ConversationParticipant.USER,
         content=content,
         translation="asdf",
         tts_uri=presigned_tts_url,
-        tts_task_id="asdf",
+        tts_task_id="d7582c37-cc79-4c82-a931-aa6108d03177",
     )
 
     return jsonify(new_message.to_dict()), 200
@@ -98,6 +103,11 @@ def test_new_resp_message():
         return jsonify(error="Invalid file name"), 400
 
     conversation_id = conversation_id.lower()
+    from app.app import redis_client
+
+    conversation = caching.get_conversation(redis_client, conversation_id)
+    if conversation is None:
+        return jsonify(error="Conversation not found"), 404
 
     api_utils.save_resp_audio(file, file.filename)
 
@@ -108,14 +118,33 @@ def test_new_resp_message():
     )
 
     new_message = Message(
+        id=caching.create_id(),
         sender=ConversationParticipant.RESPONDENT,
         content="你受伤了吗？",
         translation="Are you hurt?",
         tts_uri=presigned_tts_url,
-        tts_task_id="asdf",
+        tts_task_id="d7582c37-cc79-4c82-a931-aa6108d03177",
     )
+    conversation.new_message(new_message)
+    caching.save_conversation(redis_client, conversation)
 
     return jsonify(new_message.to_dict()), 200
+
+
+@app.route("/test_delete_message", methods=["POST"])
+def test_delete_message():
+    params = request.get_json()
+    conversation_id = params.get("conversationId")
+    message_id = params.get("messageId")
+    print("-" * 10)
+    print("call test_delete_message")
+    print("conversation_id:", conversation_id)
+    print("message_id:", message_id)
+
+    if conversation_id is None or message_id is None:
+        return jsonify(error="Missing parameter"), 400
+
+    return jsonify({}), 200
 
 
 @app.route("/test_response_options", methods=["POST"])
@@ -150,7 +179,23 @@ Option 3:
 
 @app.route("/test_response_options_stream", methods=["GET"])
 def test_response_options_stream():
-    response_content = """
+    conversation_id = request.args.get("conversationId")
+    if conversation_id is None:
+        return jsonify(error="Missing parameter"), 400
+    print("-" * 10)
+    print("call test_response_options_stream")
+    print("conversation_id:", conversation_id)
+
+    def generate(prompt):
+        for response in FIXED_RESPONSE_OPTIONS[Language.ENGLISH]:
+            response_event = {"event": "message", "data": response}
+            end_event = {"event": "end"}
+            print(json.dumps(response_event))
+            print(json.dumps(end_event))
+            yield f"data: {json.dumps(response_event)}\n\n"
+            yield f"data: {json.dumps(end_event)}\n\n"
+
+        response_content = """
 <Start>
 "I'm going to Amsterdam."
 <End>
@@ -162,9 +207,7 @@ def test_response_options_stream():
 <End>
 """
 
-    parser = OpenAIReponseOptionStreamDFA()
-
-    def generate(prompt):
+        parser = OpenAIReponseOptionStreamDFA()
         for char in response_content:
             chunk = {
                 "id": "chatcmpl-8APG8TCIjRjUaGDR5XzDwT2UXl9OT",
@@ -185,12 +228,5 @@ def test_response_options_stream():
         print("".join(parser.response_chars))
         for start_idx, end_idx in parser.message_idx:
             print("".join(parser.response_chars[start_idx:end_idx]))
-
-    conversation_id = request.args.get("conversationId")
-    if conversation_id is None:
-        return jsonify(error="Missing parameter"), 400
-    print("-" * 10)
-    print("call test_response_options_stream")
-    print("conversation_id:", conversation_id)
 
     return Response(stream_with_context(generate("")), content_type="text/event-stream")
