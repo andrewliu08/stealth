@@ -19,10 +19,25 @@ def test_get_conversation_turns(conversation):
     )
     conversation.history.append(resp_message)
 
-    conversation_turns = get_conversation_turns(conversation)
+    conversation_turns = get_conversation_turns(conversation, use_user_lang=False)
     assert conversation_turns == [
         "You:\nBonjour",
         "Other:\nSalut! Comment ca va?",
+    ]
+
+
+def test_get_conversation_turns(conversation):
+    resp_message = Message(
+        sender=ConversationParticipant.RESPONDENT,
+        content="Salut! Comment ca va?",
+        translation="Hi! How are you?",
+    )
+    conversation.history.append(resp_message)
+
+    conversation_turns = get_conversation_turns(conversation, use_user_lang=True)
+    assert conversation_turns == [
+        "You:\nHello",
+        "Other:\nHi! How are you?",
     ]
 
 
@@ -30,7 +45,7 @@ def test_get_conversation_turns_remove_intro_message(conversation):
     intro_message = "J'utilise une application de traduction. Veuillez parler dans le téléphone lorsque vous répondez."
     conversation.history[0].translation += f"\n\n {intro_message}"
 
-    conversation_turns = get_conversation_turns(conversation)
+    conversation_turns = get_conversation_turns(conversation, use_user_lang=False)
     assert conversation_turns == ["You:\nBonjour"]
 
 
@@ -43,15 +58,15 @@ def test_prompt(conversation):
     conversation.history.append(resp_message)
 
     prompt = get_prompt(conversation, num_response_options=3)
-    expected_prompt = '''You are a fluent french speaker having a conversation in french. The conversation so far is in triple quotes:
+    expected_prompt = '''You are a fluent english speaker having a conversation in english. The conversation so far is in triple quotes:
 """
 You:
-Bonjour
+Hello
 
 Other:
-Salut! Comment ca va?
+Hi! How are you?
 """
-Provide 3 options for what you might say to the other person translated to english. Follow the format in the triple quotes:
+Provide 3 of the most plausible and helpful response options which cover different possibilities. Respond briefly using ONLY english. Put any unknown information in square brackets. Follow the format in the triple quotes:
 """
 <Start>
 "<Response 1 in english>"

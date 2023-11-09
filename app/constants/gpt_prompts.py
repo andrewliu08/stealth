@@ -1,17 +1,17 @@
 RESPONSE_OPTIONS_PROMPT = '''You are a fluent {0} speaker having a conversation in {0}. The conversation so far is in triple quotes:
 """
-{2}
+{1}
 """
-Provide {3} options for what you might say to the other person translated to {1}. Follow the format in the triple quotes:
+Provide {2} of the most plausible and helpful response options which cover different possibilities. Respond briefly using ONLY {0}. Put any unknown information in square brackets. Follow the format in the triple quotes:
 """
 <Start>
-"<Response 1 in {1}>"
+"<Response 1 in {0}>"
 <End>
 <Start>
-"<Response 2 in {1}>"
+"<Response 2 in {0}>"
 <End>
 <Start>
-"<Response 3 in {1}>"
+"<Response 3 in {0}>"
 <End>
 """
 '''
