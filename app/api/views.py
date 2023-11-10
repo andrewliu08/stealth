@@ -19,8 +19,6 @@ from app.generative.openai_gpt import (
 )
 from app.models import Conversation, ConversationParticipant, Message
 
-# TODO: use more secure method of storing secret keys
-from app.secret_keys import *
 from app.translation.deepl import deepl_translate
 from app.tts.aws_polly import (
     extract_file_name_from_output_uri,

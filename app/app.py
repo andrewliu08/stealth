@@ -4,7 +4,6 @@ from dotenv import load_dotenv
 from flask import Flask
 
 from app import caching
-from app.secret_keys import *
 from app.utils.aws_utils import create_polly_client, create_s3_client
 from app.utils.openai_utils import create_openai_client
 

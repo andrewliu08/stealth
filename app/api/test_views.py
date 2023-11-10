@@ -20,8 +20,6 @@ from app.generative.openai_gpt import (
 )
 from app.models import ConversationParticipant, Message
 
-# TODO: use more secure method of storing secret keys
-from app.secret_keys import *
 from app.utils.aws_utils import generate_presigned_url
 
 test_tts_object = "polly.a35a3a62-ff8f-4e1f-b84a-f92670c44d6f.mp3"
