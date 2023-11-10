@@ -85,6 +85,13 @@ class Conversation:
     def new_message(self, message: Message):
         self.history.append(message)
 
+    def get_message(self, message_id: Message) -> Optional[Message]:
+        for message in self.history:
+            if message.id == message_id:
+                return message
+
+        return None
+
     def delete_message(self, message_id: str) -> bool:
         """Delete message with id `message_id` and all subsequent messages"""
         for i, message in enumerate(self.history):

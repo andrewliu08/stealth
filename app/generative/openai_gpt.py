@@ -1,11 +1,7 @@
 from enum import Enum
-from typing import Dict, Generator, List, Tuple, Union
+from typing import Dict, List, Tuple
 
 import openai
-
-
-def set_api_key(api_key: str):
-    openai.api_key = api_key
 
 
 class OpenAIStreamDFAState(Enum):
@@ -146,7 +142,7 @@ class OpenAIReponseOptionStreamDFA:
         return combined
 
     def process_chunk(self, event: Dict[str, str]) -> Dict[str, str]:
-        if extract_stop_reason_from_openai_response_chunk(event) == "stop":
+        if extract_finish_reason_from_openai_response_chunk(event) == "stop":
             return {"event": "stop"}
 
         message = extract_message_from_openai_response_chunk(event)
@@ -206,38 +202,38 @@ def parse_options_with_translations(response_content: str) -> List[Tuple[str, st
 
 
 def extract_message_from_openai_response(
-    response: openai.openai_object.OpenAIObject,
+    response: openai.types.chat.chat_completion.ChatCompletion,
 ) -> str:
     """
     Extract the actual GPT message from an OpenAI response
     """
-    return response["choices"][0]["message"]["content"]
+    return response.choices[0].message.content
 
 
 def extract_message_from_openai_response_chunk(
-    response: openai.openai_object.OpenAIObject,
+    chunk: openai.types.chat.chat_completion_chunk.ChatCompletionChunk,
 ) -> str:
     """
     Extract the actual GPT message from an OpenAI response chunk
     stream response
     """
-    return response["choices"][0]["delta"]["content"]
+    return chunk.choices[0].delta.content
 
 
-def extract_stop_reason_from_openai_response_chunk(
-    response: openai.openai_object.OpenAIObject,
+def extract_finish_reason_from_openai_response_chunk(
+    chunk: openai.types.chat.chat_completion_chunk.ChatCompletionChunk,
 ) -> str:
     """
     Extract the stop reason from an OpenAI response chunk
     stream response
     """
-    return response["choices"][0]["finish_reason"]
+    return chunk.choices[0].finish_reason
 
 
 def gpt_responses(
-    prompt: str, stream: bool
-) -> Union[openai.openai_object.OpenAIObject, Generator]:
-    response = openai.ChatCompletion.create(
+    openai_client: openai.OpenAI, prompt: str, stream: bool
+) -> openai.Stream | openai.types.chat.chat_completion.ChatCompletion:
+    response = openai_client.chat.completions.create(
         model="gpt-3.5-turbo",
         messages=[
             {"role": "user", "content": prompt},

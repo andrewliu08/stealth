@@ -79,6 +79,27 @@ def test_conversation_new_message(conversation):
     assert conversation.history[1].tts_task_id == "a"
 
 
+def test_conversation_get_message_exists(conversation):
+    message = conversation.get_message("2f76f523-3989-44b2-b335-011f7dbcdfc7")
+    assert message is not None
+    assert messages_equal(
+        message,
+        Message(
+            id="2f76f523-3989-44b2-b335-011f7dbcdfc7",
+            sender=ConversationParticipant.USER,
+            content="Hello",
+            translation="Bonjour",
+            tts_uri="bonjour.mp3",
+            tts_task_id="asdf",
+        ),
+    )
+
+
+def test_conversation_get_message_does_not_exist(conversation):
+    message = conversation.get_message("a")
+    assert message is None
+
+
 def test_conversation_delete_message_success(conversation):
     successfully_deleted = conversation.delete_message(
         "2f76f523-3989-44b2-b335-011f7dbcdfc7"

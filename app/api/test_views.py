@@ -1,12 +1,18 @@
 import json
+import os
 import time
 from app.constants.language import Language
 
 from flask import Response, request, jsonify, stream_with_context
+from openai.types.chat.chat_completion_chunk import (
+    ChatCompletionChunk,
+    Choice as ChunkChoice,
+    ChoiceDelta,
+)
 
 from app import caching
 from app.api import api_utils
-from app.app import app, test_tts_object
+from app.app import app, s3_client
 from app.constants.fixed_response_options import FIXED_RESPONSE_OPTIONS
 from app.generative.openai_gpt import (
     OpenAIReponseOptionStreamDFA,
@@ -16,13 +22,39 @@ from app.models import ConversationParticipant, Message
 
 # TODO: use more secure method of storing secret keys
 from app.secret_keys import *
-from app.tts.aws_polly import generate_presigned_url
+from app.utils.aws_utils import generate_presigned_url
+
+test_tts_object = "polly.a35a3a62-ff8f-4e1f-b84a-f92670c44d6f.mp3"
 
 
 @app.route("/")
 def hello_world():
     resp = {"data": ["Hello World", "x", "y"]}
     return jsonify(resp)
+
+
+@app.route("/test_stream_tts")
+def test_stream_tts():
+    conversation_id = request.args.get("conversationId")
+    message_id = request.args.get("messageId")
+    if conversation_id is None or message_id is None:
+        return jsonify(error="Missing parameter"), 400
+
+    conversation_id = conversation_id.lower()
+    message_id = message_id.lower()
+    print("-" * 10)
+    print("call test_stream_tts")
+    print("conversation_id:", conversation_id)
+    print("message_id:", message_id)
+
+    def generate():
+        s3_response = s3_client.get_object(
+            Bucket=os.environ.get("SHUO_TTS_BUCKET_NAME"), Key=test_tts_object
+        )
+        for chunk in s3_response["Body"].iter_chunks(chunk_size=4096):
+            yield chunk
+
+    return Response(generate(), mimetype="audio/mp3")
 
 
 @app.route("/test_new_conversation", methods=["POST"])
@@ -38,7 +70,10 @@ def test_new_conversation():
     print("resp_lang:", resp_lang)
 
     presigned_tts_url = generate_presigned_url(
-        AWS_ACCESS_KEY, AWS_SECRET_ACCESS_KEY, test_tts_object
+        s3_client,
+        object_name=test_tts_object,
+        bucket_name=os.environ.get("SHUO_TTS_BUCKET_NAME"),
+        expires_in=3600,
     )
 
     conversation_dict = {
@@ -74,7 +109,10 @@ def test_new_user_message():
     conversation_id = conversation_id.lower()
 
     presigned_tts_url = generate_presigned_url(
-        AWS_ACCESS_KEY, AWS_SECRET_ACCESS_KEY, test_tts_object
+        s3_client,
+        object_name=test_tts_object,
+        bucket_name=os.environ.get("SHUO_TTS_BUCKET_NAME"),
+        expires_in=3600,
     )
 
     new_message = Message(
@@ -103,18 +141,21 @@ def test_new_resp_message():
         return jsonify(error="Invalid file name"), 400
 
     conversation_id = conversation_id.lower()
-    from app.app import redis_client
+    # from app.app import redis_client
 
-    conversation = caching.get_conversation(redis_client, conversation_id)
-    if conversation is None:
-        return jsonify(error="Conversation not found"), 404
+    # conversation = caching.get_conversation(redis_client, conversation_id)
+    # if conversation is None:
+    #     return jsonify(error="Conversation not found"), 404
 
     api_utils.save_resp_audio(file, file.filename)
 
     time.sleep(3)
 
     presigned_tts_url = generate_presigned_url(
-        AWS_ACCESS_KEY, AWS_SECRET_ACCESS_KEY, test_tts_object
+        s3_client,
+        object_name=test_tts_object,
+        bucket_name=os.environ.get("SHUO_TTS_BUCKET_NAME"),
+        expires_in=3600,
     )
 
     new_message = Message(
@@ -125,8 +166,8 @@ def test_new_resp_message():
         tts_uri=presigned_tts_url,
         tts_task_id="d7582c37-cc79-4c82-a931-aa6108d03177",
     )
-    conversation.new_message(new_message)
-    caching.save_conversation(redis_client, conversation)
+    # conversation.new_message(new_message)
+    # caching.save_conversation(redis_client, conversation)
 
     return jsonify(new_message.to_dict()), 200
 
@@ -209,21 +250,31 @@ def test_response_options_stream():
 
         parser = OpenAIReponseOptionStreamDFA()
         for char in response_content:
-            chunk = {
-                "id": "chatcmpl-8APG8TCIjRjUaGDR5XzDwT2UXl9OT",
-                "object": "chat.completion.chunk",
-                "created": 1697491068,
-                "model": "gpt-3.5-turbo-0613",
-                "choices": [
-                    {"index": 0, "delta": {"content": char}, "finish_reason": "null"}
+            chunk = ChatCompletionChunk(
+                id="chatcmpl-8J7mnNeFwHVJxH9Pw0MEdSg1hgdOF",
+                choices=[
+                    ChunkChoice(
+                        delta=ChoiceDelta(
+                            content=char,
+                            function_call=None,
+                            role=None,
+                            tool_calls=None,
+                        ),
+                        finish_reason=None,
+                        index=0,
+                    )
                 ],
-            }
+                created=1699568853,
+                model="gpt-3.5-turbo-0613",
+                object="chat.completion.chunk",
+                system_fingerprint=None,
+            )
 
             events = parser.process_chunk(chunk)
             for event in events:
                 print(json.dumps(event))
                 yield f"data: {json.dumps(event)}\n\n"
-            time.sleep(0.05)
+            time.sleep(0.01)
 
         print("".join(parser.response_chars))
         for start_idx, end_idx in parser.message_idx:

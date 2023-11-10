@@ -1,10 +1,20 @@
 import pytest
+from openai.types.chat.chat_completion import ChatCompletion, Choice as ChatChoice
+from openai.types.chat.chat_completion_chunk import (
+    ChatCompletionChunk,
+    Choice as ChunkChoice,
+    ChoiceDelta,
+)
+from openai.types.chat.chat_completion_message import ChatCompletionMessage
+from openai.types.completion_usage import CompletionUsage
+
+# from openai.types import Choice
 
 from app.generative.openai_gpt import (
     OpenAIReponseOptionStreamDFA,
     extract_message_from_openai_response,
     extract_message_from_openai_response_chunk,
-    extract_stop_reason_from_openai_response_chunk,
+    extract_finish_reason_from_openai_response_chunk,
     parse_options,
     parse_options_with_translations,
 )
@@ -12,49 +22,65 @@ from app.generative.openai_gpt import (
 
 @pytest.fixture
 def openai_response():
-    return {
-        "id": "chatcmpl-123",
-        "object": "chat.completion",
-        "created": 1677652288,
-        "model": "gpt-3.5-turbo-0613",
-        "system_fingerprint": "fp_44709d6fcb",
-        "choices": [
-            {
-                "index": 0,
-                "message": {
-                    "role": "assistant",
-                    "content": "\n\nHello there, how may I assist you today?",
-                },
-                "finish_reason": "stop",
-            }
+    return ChatCompletion(
+        id="chatcmpl-8J7nRQFmcjrcwkES2iXH6irGlBOM1",
+        choices=[
+            ChatChoice(
+                finish_reason="stop",
+                index=0,
+                message=ChatCompletionMessage(
+                    content="Hello world",
+                    role="assistant",
+                    function_call=None,
+                    tool_calls=None,
+                ),
+            )
         ],
-        "usage": {"prompt_tokens": 9, "completion_tokens": 12, "total_tokens": 21},
-    }
+        created=1699568893,
+        model="gpt-3.5-turbo-0613",
+        object="chat.completion",
+        system_fingerprint=None,
+        usage=CompletionUsage(completion_tokens=16, prompt_tokens=11, total_tokens=27),
+    )
 
 
 @pytest.fixture
 def openai_response_chunk():
-    return {
-        "id": "chatcmpl-8APG8TCIjRjUaGDR5XzDwT2UXl9OT",
-        "object": "chat.completion.chunk",
-        "created": 1697491068,
-        "model": "gpt-3.5-turbo-0613",
-        "choices": [
-            {"index": 0, "delta": {"content": "Option"}, "finish_reason": "null"}
+    return ChatCompletionChunk(
+        id="chatcmpl-8J7mnNeFwHVJxH9Pw0MEdSg1hgdOF",
+        choices=[
+            ChunkChoice(
+                delta=ChoiceDelta(
+                    content="Hello", function_call=None, role=None, tool_calls=None
+                ),
+                finish_reason=None,
+                index=0,
+            )
         ],
-    }
+        created=1699568853,
+        model="gpt-3.5-turbo-0613",
+        object="chat.completion.chunk",
+        system_fingerprint=None,
+    )
 
 
 def convert_to_response_chunk(message):
-    return {
-        "id": "chatcmpl-8APG8TCIjRjUaGDR5XzDwT2UXl9OT",
-        "object": "chat.completion.chunk",
-        "created": 1697491068,
-        "model": "gpt-3.5-turbo-0613",
-        "choices": [
-            {"index": 0, "delta": {"content": message}, "finish_reason": "null"}
+    return ChatCompletionChunk(
+        id="chatcmpl-8J7mnNeFwHVJxH9Pw0MEdSg1hgdOF",
+        choices=[
+            ChunkChoice(
+                delta=ChoiceDelta(
+                    content=message, function_call=None, role=None, tool_calls=None
+                ),
+                finish_reason=None,
+                index=0,
+            )
         ],
-    }
+        created=1699568853,
+        model="gpt-3.5-turbo-0613",
+        object="chat.completion.chunk",
+        system_fingerprint=None,
+    )
 
 
 def test_stream_dfa_process_chars():
@@ -147,14 +173,16 @@ Option 3:
 
 def test_extract_message_from_openai_response(openai_response):
     message = extract_message_from_openai_response(openai_response)
-    assert message == "\n\nHello there, how may I assist you today?"
+    assert message == "Hello world"
 
 
 def test_extract_message_from_openai_response_chunk(openai_response_chunk):
     message = extract_message_from_openai_response_chunk(openai_response_chunk)
-    assert message == "Option"
+    assert message == "Hello"
 
 
 def test_extract_stop_reason_from_openai_response_chunk(openai_response_chunk):
-    stop_reason = extract_stop_reason_from_openai_response_chunk(openai_response_chunk)
-    assert stop_reason == "null"
+    stop_reason = extract_finish_reason_from_openai_response_chunk(
+        openai_response_chunk
+    )
+    assert stop_reason is None

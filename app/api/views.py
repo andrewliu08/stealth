@@ -1,10 +1,11 @@
 import json
+import os
 
 from flask import Response, request, jsonify, stream_with_context
 
 from app import caching
 from app.api import api_utils
-from app.app import app, redis_client, polly_client
+from app.app import app, openai_client, polly_client, redis_client, s3_client
 from app.avr.speechmatics import speechmatics_live_avr
 from app.constants.fixed_response_options import FIXED_RESPONSE_OPTIONS
 from app.constants.intro_messages import INTRO_MESSAGE_TRANSLATIONS
@@ -15,7 +16,6 @@ from app.generative.openai_gpt import (
     extract_message_from_openai_response,
     gpt_responses,
     parse_options_with_translations,
-    set_api_key,
 )
 from app.models import Conversation, ConversationParticipant, Message
 
@@ -26,10 +26,11 @@ from app.tts.aws_polly import (
     extract_file_name_from_output_uri,
     extract_task_id_from_polly_response,
     extract_uri_from_polly_response,
-    generate_presigned_url,
     polly_synthesis_task_status,
     polly_tts,
 )
+from app.tts.openai_tts import openai_tts
+from app.utils.aws_utils import generate_presigned_url
 
 
 @app.route("/starter_messages", methods=["GET"])
@@ -58,6 +59,33 @@ def tts_task_status():
     return jsonify({"status": task_status}), 200
 
 
+@app.route("/stream_tts", methods=["GET"])
+def stream_tts():
+    conversation_id = request.args.get("conversationId")
+    message_id = request.args.get("messageId")
+    if conversation_id is None or message_id is None:
+        return jsonify(error="Missing parameter"), 400
+
+    conversation_id = conversation_id.lower()
+    message_id = message_id.lower()
+    conversation = caching.get_conversation(redis_client, conversation_id)
+    if conversation is None:
+        return jsonify(error="Conversation not found"), 404
+    message = conversation.get_message(message_id)
+    if message is None:
+        return jsonify(error="Message not found"), 404
+
+    response = openai_tts(openai_client, message.translation)
+
+    def generate():
+        # 4096 bytes (or 4 KB) is a conventional one based on common I/O operations
+        # and many OS use a 4 KB memory page size.
+        for chunk in response.iter_bytes(chunk_size=4096):
+            yield chunk
+
+    return Response(generate(), mimetype="audio/mpeg")
+
+
 @app.route("/new_conversation", methods=["POST"])
 def new_conversation():
     params = request.get_json()
@@ -73,7 +101,9 @@ def new_conversation():
     except ValueError:
         return jsonify(error="Invalid language"), 400
 
-    translation = deepl_translate(content, user_lang, resp_lang, DEEPL_API_KEY)
+    translation = deepl_translate(
+        content, user_lang, resp_lang, os.environ.get("DEEPL_API_KEY")
+    )
 
     combined_message = content + "\n\n" + INTRO_MESSAGE_TRANSLATIONS[user_lang]
     combined_translation = translation + "\n\n" + INTRO_MESSAGE_TRANSLATIONS[resp_lang]
@@ -85,7 +115,10 @@ def new_conversation():
     tts_task_id = extract_task_id_from_polly_response(polly_response)
     file_name = extract_file_name_from_output_uri(tts_uri)
     presigned_tts_url = generate_presigned_url(
-        AWS_ACCESS_KEY, AWS_SECRET_ACCESS_KEY, file_name
+        s3_client,
+        object_name=file_name,
+        bucket_name=os.environ.get("SHUO_TTS_BUCKET_NAME"),
+        expires_in=3600,
     )
 
     new_message = Message(
@@ -122,7 +155,10 @@ def new_user_message():
         return jsonify(error="Conversation not found"), 404
 
     translation = deepl_translate(
-        content, conversation.user_lang, conversation.resp_lang, DEEPL_API_KEY
+        content,
+        conversation.user_lang,
+        conversation.resp_lang,
+        os.environ.get("DEEPL_API_KEY"),
     )
 
     polly_response = polly_tts(
@@ -132,7 +168,10 @@ def new_user_message():
     tts_task_id = extract_task_id_from_polly_response(polly_response)
     file_name = extract_file_name_from_output_uri(tts_uri)
     presigned_tts_url = generate_presigned_url(
-        AWS_ACCESS_KEY, AWS_SECRET_ACCESS_KEY, file_name
+        s3_client,
+        object_name=file_name,
+        bucket_name=os.environ.get("SHUO_TTS_BUCKET_NAME"),
+        expires_in=3600,
     )
 
     new_message = Message(
@@ -166,11 +205,14 @@ def new_resp_message():
     file_path = api_utils.save_resp_audio(file, conversation_id + "_" + file.filename)
 
     transcript = speechmatics_live_avr(
-        SPEECHMATICS_API_KEY, conversation.resp_lang, file_path
+        os.environ.get("SPEECHMATICS_API_KEY"), conversation.resp_lang, file_path
     )
 
     translation = deepl_translate(
-        transcript, conversation.resp_lang, conversation.user_lang, DEEPL_API_KEY
+        transcript,
+        conversation.resp_lang,
+        conversation.user_lang,
+        os.environ.get("DEEPL_API_KEY"),
     )
 
     polly_response = polly_tts(
@@ -180,7 +222,10 @@ def new_resp_message():
     tts_task_id = extract_task_id_from_polly_response(polly_response)
     file_name = extract_file_name_from_output_uri(tts_uri)
     presigned_tts_url = generate_presigned_url(
-        AWS_ACCESS_KEY, AWS_SECRET_ACCESS_KEY, file_name
+        s3_client,
+        object_name=file_name,
+        bucket_name=os.environ.get("SHUO_TTS_BUCKET_NAME"),
+        expires_in=3600,
     )
 
     new_message = Message(
@@ -233,7 +278,6 @@ def response_options():
 
     prompt = get_prompt_with_translations(conversation, num_response_options=3)
     print(prompt)
-    set_api_key(OPENAI_API_KEY)
     response = gpt_responses(prompt, stream=False)
     gpt_message = extract_message_from_openai_response(response)
     print(gpt_message)
@@ -253,14 +297,17 @@ def response_options_stream():
     if conversation is None:
         return jsonify(error="Conversation not found"), 404
 
-    def generate(prompt):
+    prompt = get_prompt(conversation, num_response_options=3)
+    print(prompt)
+    response_stream = gpt_responses(openai_client, prompt, stream=True)
+
+    def generate():
         for response in FIXED_RESPONSE_OPTIONS[conversation.user_lang]:
             response_event = {"event": "message", "data": response}
             end_event = {"event": "end"}
             yield f"data: {json.dumps(response_event)}\n\n"
             yield f"data: {json.dumps(end_event)}\n\n"
 
-        response_stream = gpt_responses(prompt, stream=True)
         parser = OpenAIReponseOptionStreamDFA()
         for chunk in response_stream:
             events = parser.process_chunk(chunk)
@@ -271,10 +318,4 @@ def response_options_stream():
         for start_idx, end_idx in parser.message_idx:
             print("".join(parser.response_chars[start_idx:end_idx]))
 
-    prompt = get_prompt(conversation, num_response_options=3)
-    print(prompt)
-    set_api_key(OPENAI_API_KEY)
-
-    return Response(
-        stream_with_context(generate(prompt)), content_type="text/event-stream"
-    )
+    return Response(stream_with_context(generate()), content_type="text/event-stream")
