@@ -214,7 +214,7 @@ def new_resp_message():
     )
 
     polly_response = polly_tts(
-        polly_client, translation, conversation.user_lang, "standard"
+        polly_client, translation, conversation.user_lang, "neural"
     )
     tts_uri = extract_uri_from_polly_response(polly_response)
     tts_task_id = extract_task_id_from_polly_response(polly_response)

@@ -1,4 +1,11 @@
 .vscode/*
+.env
+
+# testing
+stream_sample.*
+*.mp3
+*.m4a
+*.ipynb
 
 # Elastic Beanstalk Files
 .elasticbeanstalk/*
