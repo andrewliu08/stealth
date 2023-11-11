@@ -2,7 +2,7 @@ RESPONSE_OPTIONS_PROMPT = '''You are a fluent {0} speaker having a conversation 
 """
 {1}
 """
-Provide {2} of the most plausible and helpful response options which cover different possibilities. Respond briefly using ONLY {0}. Put any unknown information in square brackets. Follow the format in the triple quotes:
+Provide {2} of the most plausible and helpful response options "Person 1" would say. The responses should be brief, cover different possibilities, and contain ONLY {0}. Put any unknown information in square brackets. Follow the format in the triple quotes:
 """
 <Start>
 "<Response 1 in {0}>"

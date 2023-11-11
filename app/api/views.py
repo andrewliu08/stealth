@@ -6,6 +6,7 @@ from flask import Response, request, jsonify, stream_with_context
 from app import caching
 from app.api import api_utils
 from app.app import app, openai_client, polly_client, redis_client, s3_client
+from app.avr.openai_whisper import openai_avr
 from app.avr.speechmatics import speechmatics_live_avr
 from app.constants.fixed_response_options import FIXED_RESPONSE_OPTIONS
 from app.constants.intro_messages import INTRO_MESSAGE_TRANSLATIONS
@@ -202,9 +203,8 @@ def new_resp_message():
 
     file_path = api_utils.save_resp_audio(file, conversation_id + "_" + file.filename)
 
-    transcript = speechmatics_live_avr(
-        os.environ.get("SPEECHMATICS_API_KEY"), conversation.resp_lang, file_path
-    )
+    transcript = openai_avr(openai_client, file_path, conversation.resp_lang)
+    transcript = transcript.strip()
 
     translation = deepl_translate(
         transcript,
@@ -297,7 +297,6 @@ def response_options_stream():
 
     prompt = get_prompt(conversation, num_response_options=3)
     print(prompt)
-    response_stream = gpt_responses(openai_client, prompt, stream=True)
 
     def generate():
         for response in FIXED_RESPONSE_OPTIONS[conversation.user_lang]:
@@ -306,6 +305,7 @@ def response_options_stream():
             yield f"data: {json.dumps(response_event)}\n\n"
             yield f"data: {json.dumps(end_event)}\n\n"
 
+        response_stream = gpt_responses(openai_client, prompt, stream=True)
         parser = OpenAIReponseOptionStreamDFA()
         for chunk in response_stream:
             events = parser.process_chunk(chunk)

@@ -225,7 +225,7 @@ def test_response_options_stream():
     print("call test_response_options_stream")
     print("conversation_id:", conversation_id)
 
-    def generate(prompt):
+    def generate():
         for response in FIXED_RESPONSE_OPTIONS[Language.ENGLISH]:
             response_event = {"event": "message", "data": response}
             end_event = {"event": "end"}
@@ -278,4 +278,4 @@ def test_response_options_stream():
         for start_idx, end_idx in parser.message_idx:
             print("".join(parser.response_chars[start_idx:end_idx]))
 
-    return Response(stream_with_context(generate("")), content_type="text/event-stream")
+    return Response(stream_with_context(generate()), content_type="text/event-stream")

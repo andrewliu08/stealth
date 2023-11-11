@@ -21,14 +21,14 @@ def get_conversation_turns(
     for i, message in enumerate(conversation.history):
         if message.sender == ConversationParticipant.USER:
             content = message.content if use_user_lang else message.translation
-            s = "You:\n" + content
+            s = "Person 1:\n" + content
             # Remove intro message when prompting
             if i == 0:
                 for intro_message in INTRO_MESSAGE_TRANSLATIONS.values():
                     s = s.replace(intro_message, "")
         else:
             content = message.content if not use_user_lang else message.translation
-            s = "Other:\n" + content
+            s = "Person 2:\n" + content
         history.append(s.strip())
     return history
 

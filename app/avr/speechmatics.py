@@ -71,8 +71,8 @@ def create_connection_settings(
 
 def speechmatics_file_avr(
     settings: speechmatics.models.ConnectionSettings,
-    language: Language,
     audio_file: str,
+    language: Language,
 ) -> str:
     # Define transcription parameters
     language_code = SPEECHMATICS_LANG_TO_CODE[language]
@@ -95,7 +95,7 @@ def speechmatics_file_avr(
             raise e
 
 
-def speechmatics_live_avr(api_key: str, language: Language, audio_file: str) -> str:
+def speechmatics_live_avr(api_key: str, audio_file: str, language: Language) -> str:
     language_code = SPEECHMATICS_LANG_TO_CODE[language]
     ws = speechmatics.client.WebsocketClient(
         speechmatics.models.ConnectionSettings(
