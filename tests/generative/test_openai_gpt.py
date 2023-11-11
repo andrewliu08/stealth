@@ -17,6 +17,7 @@ from app.generative.openai_gpt import (
     extract_finish_reason_from_openai_response_chunk,
     parse_options,
     parse_options_with_translations,
+    parse_streamed_options,
 )
 
 
@@ -119,6 +120,66 @@ def test_stream_dfa_process_chars():
         "Is <au noir> within walking distance from here?",
     ]
     assert messages == expected_messages
+
+
+def test_stream_dfa_process_chars_with_triple_quotes():
+    message = '''
+"""
+<Start>
+"Thank you for the recommendation. What type of cuisine do they serve at "au noir"?"
+<End>
+<Start>
+"Do they have any vegetarian options at 'au noir'? I have dietary restrictions."
+<End>
+<Start>
+"Is <au noir> within walking distance from here?"
+<End>
+"""
+'''
+    chunks = list(message)
+    parser = OpenAIReponseOptionStreamDFA()
+    events = []
+    for chunk in chunks:
+        event = parser.process_char(chunk)
+        events.append(event)
+
+    messages = []
+    curr_message = []
+    for event in events:
+        if "event" not in event:
+            continue
+        if event["event"] == "message":
+            curr_message += event["data"]
+        elif event["event"] == "end":
+            messages.append("".join(curr_message))
+            curr_message = []
+
+    expected_messages = [
+        'Thank you for the recommendation. What type of cuisine do they serve at "au noir"?',
+        "Do they have any vegetarian options at 'au noir'? I have dietary restrictions.",
+        "Is <au noir> within walking distance from here?",
+    ]
+    assert messages == expected_messages
+
+
+def test_parse_streamed_options():
+    response_content = '''"""<Start>
+"Can you tell me the nearest metro station to Musee d'Orsay?"
+<End>
+<Start>
+"What are the museum's opening hours?"
+<End>
+<Start>
+"Is there an entrance fee to Musee d'Orsay?"
+<End>
+"""
+'''
+    options = parse_streamed_options(response_content)
+    assert options == [
+        "Can you tell me the nearest metro station to Musee d'Orsay?",
+        "What are the museum's opening hours?",
+        "Is there an entrance fee to Musee d'Orsay?",
+    ]
 
 
 def test_parse_options():

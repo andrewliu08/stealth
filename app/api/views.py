@@ -14,9 +14,12 @@ from app.constants.starter_messages import STARTER_MESSAGE_TRANSLATIONS
 from app.generative.prompts import get_prompt, get_prompt_with_translations
 from app.generative.openai_gpt import (
     OpenAIReponseOptionStreamDFA,
+    extract_finish_reason_from_openai_response_chunk,
     extract_message_from_openai_response,
+    extract_message_from_openai_response_chunk,
     gpt_responses,
     parse_options_with_translations,
+    parse_streamed_options,
 )
 from app.models import Conversation, ConversationParticipant, Message
 
@@ -307,13 +310,54 @@ def response_options_stream():
 
         response_stream = gpt_responses(openai_client, prompt, stream=True)
         parser = OpenAIReponseOptionStreamDFA()
+        deltas = []
+        parsing_error = True
         for chunk in response_stream:
-            events = parser.process_chunk(chunk)
+            try:
+                events = parser.process_chunk(chunk)
+            except Exception as e:
+                print("Error parsing GPT response stream:", e)
+                events = []
+                parsing_error = True
+
             for event in events:
                 yield f"data: {json.dumps(event)}\n\n"
 
-        print("".join(parser.response_chars))
-        for start_idx, end_idx in parser.message_idx:
-            print("".join(parser.response_chars[start_idx:end_idx]))
+            if extract_finish_reason_from_openai_response_chunk(chunk) != "stop":
+                message_chunk = extract_message_from_openai_response_chunk(chunk)
+                deltas.append(message_chunk)
+
+        full_message = "".join(deltas)
+        print(full_message)
+
+        # Parsing the whole response is more robust than parsing the stream
+        if parsing_error:
+            print("Parsing error, trying to recover...")
+
+            # Tell app to clear the response options
+            clear_event = {"event": "clear"}
+            yield f"data: {json.dumps(clear_event)}\n\n"
+
+            # Resend the fixed response options
+            for response in FIXED_RESPONSE_OPTIONS[conversation.user_lang]:
+                response_event = {"event": "message", "data": response}
+                end_event = {"event": "end"}
+                yield f"data: {json.dumps(response_event)}\n\n"
+                yield f"data: {json.dumps(end_event)}\n\n"
+
+            # Parse the full response
+            options = parse_streamed_options(full_message)
+            print(options)
+            for option in options:
+                response_event = {"event": "message", "data": option}
+                end_event = {"event": "end"}
+                yield f"data: {json.dumps(response_event)}\n\n"
+                yield f"data: {json.dumps(end_event)}\n\n"
+
+            stop_event = {"event": "stop"}
+            yield f"data: {json.dumps(stop_event)}\n\n"
+        else:
+            for start_idx, end_idx in parser.message_idx:
+                print("".join(parser.response_chars[start_idx:end_idx]))
 
     return Response(stream_with_context(generate()), content_type="text/event-stream")

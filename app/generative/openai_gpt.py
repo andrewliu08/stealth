@@ -55,7 +55,7 @@ class OpenAIReponseOptionStreamDFA:
                 self.state = OpenAIStreamDFAState.START_TAG
                 self.open_angle_bracket_idx.append(len(self.response_chars) - 1)
                 return {}
-            elif char.isspace():
+            elif not char.isalpha():
                 return {}
             else:
                 raise ValueError(f"Unexpected char {char} in state {self.state}")
@@ -151,6 +151,25 @@ class OpenAIReponseOptionStreamDFA:
             return_events.append(self.process_char(char))
 
         return self.combine_return_events(return_events)
+
+
+def parse_streamed_options(text: str) -> List[str]:
+    # Split the text by the <Start> and <End> tags
+    parts = text.split("<End>")
+
+    options = []
+    for part in parts:
+        # Check if <Start> is in the part
+        if "<Start>" in part:
+            # Extract the response between <Start> and <End>
+            option = part.split("<Start>")[1].strip()
+            # Remove quotes and add to the list
+            option = option.strip()
+            option = option.strip('"')
+            option = option.strip()
+            options.append(option)
+
+    return options
 
 
 def parse_options(response_content: str) -> List[str]:
